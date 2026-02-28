@@ -348,3 +348,19 @@ export interface DebugInfo {
   contextUsagePercent: number;
 }
 export type AppScreen = 'onboarding' | 'home' | 'models' | 'chat' | 'settings' | 'generate' | 'model-download';
+
+export type {
+  EmbeddingPackManifest,
+  DetectorConfig,
+  EmbeddingPack,
+  PackIndividual,
+  LocalIndividual,
+  Observation,
+  Detection,
+  MatchCandidate,
+  EncounterFields,
+  SyncStatus,
+  SyncQueueItem,
+  BoundingBox,
+  DetectionResult,
+} from './wildlife';
