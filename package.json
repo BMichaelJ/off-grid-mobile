@@ -37,6 +37,7 @@
     "llama.rn": "^0.11.0-rc.3",
     "lottie-react-native": "^7.3.5",
     "moti": "^0.30.0",
+    "onnxruntime-react-native": "^1.24.2",
     "patch-package": "^8.0.1",
     "react": "19.2.0",
     "react-native": "0.83.1",
