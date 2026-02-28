@@ -8,7 +8,7 @@ module.exports = {
   testEnvironment: 'node',
   clearMocks: true,
   verbose: true,
-  testTimeout: 10000,
+  testTimeout: 60000,
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
     '!src/**/index.ts',

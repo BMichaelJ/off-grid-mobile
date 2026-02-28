@@ -14,7 +14,7 @@ if [ -n "$STAGED_JS" ]; then
   npx tsc --noEmit
 
   echo "▶ JS/TS tests..."
-  npx jest --coverage --forceExit
+  npx jest --coverage --forceExit --maxWorkers=50%
 fi
 
 # ── Swift / iOS ────────────────────────────────────────────────────────────────
