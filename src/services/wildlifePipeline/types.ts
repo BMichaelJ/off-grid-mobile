@@ -1,0 +1,24 @@
+import type { DetectorConfig, Detection } from '../../types';
+import type { EmbeddingDatabaseEntry } from '../embeddingMatchService/types';
+
+export interface SpeciesConfig {
+  packId: string;
+  species: string;
+  detectorModelPath: string;
+  detectorConfig: DetectorConfig;
+  embeddingDatabase: EmbeddingDatabaseEntry[];
+}
+
+export interface ProcessPhotoParams {
+  photoUri: string;
+  gps: { lat: number; lon: number } | null;
+  speciesConfigs: SpeciesConfig[];
+  miewidModelPath: string;
+}
+
+export interface PipelineResult {
+  observationId: string;
+  photoUri: string;
+  detections: Detection[];
+  totalInferenceTimeMs: number;
+}

@@ -24,3 +24,4 @@ export { onnxInferenceService } from './onnxInferenceService';
 export type { ToolDefinition, ToolCall, ToolResult } from './tools';
 export { packManager } from './packManager';
 export { embeddingMatchService } from './embeddingMatchService';
+export { wildlifePipeline } from './wildlifePipeline';
