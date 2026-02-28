@@ -14,7 +14,7 @@ if [ -n "$STAGED_JS" ]; then
   npx tsc --noEmit
 
   echo "▶ JS/TS tests..."
-  npm test
+  npx jest --coverage --forceExit
 fi
 
 # ── Swift / iOS ────────────────────────────────────────────────────────────────
