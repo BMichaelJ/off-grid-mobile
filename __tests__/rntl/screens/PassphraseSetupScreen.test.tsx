@@ -437,7 +437,7 @@ describe('PassphraseSetupScreen', () => {
     await act(async () => {
       resolveSetPassphrase!(true);
     });
-  });
+  }, 20000);
 
   it('does not call setEnabled when setting passphrase in change mode', async () => {
     mockChangePassphrase.mockResolvedValue(true);

@@ -20,4 +20,7 @@ export { fetchAvailableModels, getVariantLabel, guessStyle } from './huggingFace
 export type { HFImageModel } from './huggingFaceModelBrowser';
 export { documentService } from './documentService';
 export { AVAILABLE_TOOLS, getToolsAsOpenAISchema, buildToolSystemPromptHint, executeToolCall } from './tools';
+export { onnxInferenceService } from './onnxInferenceService';
 export type { ToolDefinition, ToolCall, ToolResult } from './tools';
+export { packManager } from './packManager';
+export { embeddingMatchService } from './embeddingMatchService';

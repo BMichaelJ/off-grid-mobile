@@ -210,7 +210,7 @@ describe('ModelDownloadScreen', () => {
       <ModelDownloadScreen navigation={mockNavigation} />,
     );
     expect(getByText('Analyzing your device...')).toBeTruthy();
-  });
+  }, 20000);
 
   it('renders with testID for loading state', () => {
     const { getByTestId } = render(

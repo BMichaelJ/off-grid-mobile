@@ -144,6 +144,18 @@ jest.mock('whisper.rn', () => ({
   },
 }), { virtual: true });
 
+// onnxruntime-react-native mock - use virtual mock since native module may not resolve
+jest.mock('onnxruntime-react-native', () => ({
+  InferenceSession: {
+    create: jest.fn(() => Promise.resolve({
+      release: jest.fn(() => Promise.resolve()),
+      run: jest.fn(() => Promise.resolve({})),
+    })),
+  },
+  Tensor: jest.fn(),
+  env: {},
+}));
+
 // react-native-fs mock
 jest.mock('react-native-fs', () => ({
   DocumentDirectoryPath: '/mock/documents',
