@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -9,6 +9,33 @@ import type { SpeciesConfig } from '../../services/wildlifePipeline/types';
 import type { RootStackParamList } from '../../navigation/types';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
+/**
+ * Attempt to get the device's current GPS coordinates.
+ * Returns null if unavailable — GPS is best-effort since the app
+ * may be used offline or without location permissions.
+ *
+ * TODO: Integrate @react-native-community/geolocation or
+ * expo-location once native setup is in place.
+ */
+async function getDeviceLocation(): Promise<{
+  lat: number;
+  lon: number;
+  accuracy: number;
+} | null> {
+  // GPS integration requires native module setup that is out of scope
+  // for this wiring task. Return null for now; Task 5.x will add
+  // actual Geolocation calls.
+  return null;
+}
+
+/** Build device info from React Native Platform API. */
+function getDeviceInfo(): { model: string; os: string } {
+  return {
+    model: Platform.OS,
+    os: `${Platform.OS} ${Platform.Version}`,
+  };
+}
 
 export function useCaptureFlow() {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -34,9 +61,12 @@ export function useCaptureFlow() {
           embeddingDatabase: [],
         }));
 
+        const gps = await getDeviceLocation();
+        const deviceInfo = getDeviceInfo();
+
         const result = await wildlifePipeline.processPhoto({
           photoUri,
-          gps: null,
+          gps,
           speciesConfigs,
           miewidModelPath,
         });
@@ -45,9 +75,9 @@ export function useCaptureFlow() {
         useWildlifeStore.getState().addObservation({
           id: result.observationId,
           photoUri: result.photoUri,
-          gps: null,
+          gps,
           timestamp: new Date().toISOString(),
-          deviceInfo: { model: 'unknown', os: 'unknown' },
+          deviceInfo,
           fieldNotes: null,
           detections: result.detections,
           createdAt: new Date().toISOString(),

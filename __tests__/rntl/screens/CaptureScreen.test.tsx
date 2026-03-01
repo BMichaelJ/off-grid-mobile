@@ -11,11 +11,13 @@
  * - Navigates to DetectionResults after successful pipeline run
  * - Shows error alert when pipeline fails
  * - Shows cancel state when user cancels photo selection
+ * - Saves observation with device info from Platform API
+ * - Passes GPS as null (stub) to pipeline and observation
  */
 
 import React from 'react';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import { wildlifePipeline } from '../../../src/services/wildlifePipeline';
 import { useWildlifeStore } from '../../../src/stores/wildlifeStore';
@@ -80,6 +82,7 @@ describe('CaptureScreen', () => {
     jest.clearAllMocks();
     useWildlifeStore.setState({
       packs: [],
+      observations: [],
       miewidModelPath: '/mock/miewid.onnx',
     });
     mockProcessPhoto.mockResolvedValue(MOCK_PIPELINE_RESULT);
@@ -178,6 +181,44 @@ describe('CaptureScreen', () => {
         { observationId: 'obs-123' },
       );
     });
+  });
+
+  // ==========================================================================
+  // Device Info & GPS
+  // ==========================================================================
+
+  it('saves observation with device info from Platform API', async () => {
+    const { getByTestId } = render(<CaptureScreen />);
+    fireEvent.press(getByTestId('take-photo-button'));
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalled();
+    });
+
+    const observations = useWildlifeStore.getState().observations;
+    expect(observations).toHaveLength(1);
+    expect(observations[0].deviceInfo).toEqual({
+      model: Platform.OS,
+      os: `${Platform.OS} ${Platform.Version}`,
+    });
+  });
+
+  it('passes GPS as null (stub) to pipeline and observation', async () => {
+    const { getByTestId } = render(<CaptureScreen />);
+    fireEvent.press(getByTestId('take-photo-button'));
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalled();
+    });
+
+    // GPS passed to pipeline
+    expect(mockProcessPhoto).toHaveBeenCalledWith(
+      expect.objectContaining({ gps: null }),
+    );
+
+    // GPS saved in observation
+    const observations = useWildlifeStore.getState().observations;
+    expect(observations[0].gps).toBeNull();
   });
 
   // ==========================================================================
