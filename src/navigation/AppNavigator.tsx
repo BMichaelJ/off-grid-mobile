@@ -15,122 +15,27 @@ import { triggerHaptic } from '../utils/haptics';
 import { useAppStore } from '../stores';
 import {
   OnboardingScreen,
-  ModelDownloadScreen,
-  HomeScreen,
-  ModelsScreen,
-  ChatScreen,
   SettingsScreen,
-  ProjectsScreen,
-  ChatsListScreen,
-  ProjectDetailScreen,
-  ProjectEditScreen,
-  DownloadManagerScreen,
-  ModelSettingsScreen,
-  VoiceSettingsScreen,
-  DeviceInfoScreen,
-  StorageSettingsScreen,
-  SecuritySettingsScreen,
-  GalleryScreen,
+  WildlifeHomeScreen,
+  PacksScreen,
+  CaptureScreen,
+  DetectionResultsScreen,
+  MatchReviewScreen,
+  ObservationsScreen,
+  ObservationDetailScreen,
+  SyncScreen,
 } from '../screens';
-import {
-  RootStackParamList,
-  MainTabParamList,
-  ChatsStackParamList,
-  ProjectsStackParamList,
-  ModelsStackParamList,
-  SettingsStackParamList,
-} from './types';
+import type { RootStackParamList, MainTabParamList } from './types';
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
-const ChatsStack = createNativeStackNavigator<ChatsStackParamList>();
-const ProjectsStack = createNativeStackNavigator<ProjectsStackParamList>();
-const ModelsStack = createNativeStackNavigator<ModelsStackParamList>();
-const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
-
-// Chats Tab Stack
-const ChatsStackNavigator: React.FC = () => {
-  const { colors } = useTheme();
-  return (
-    <ChatsStack.Navigator
-      screenOptions={{
-        headerShown: false,
-        animation: 'slide_from_right',
-        contentStyle: { backgroundColor: colors.background },
-      }}
-    >
-      <ChatsStack.Screen name="ChatsList" component={ChatsListScreen} />
-      <ChatsStack.Screen name="Chat" component={ChatScreen} />
-    </ChatsStack.Navigator>
-  );
-};
-
-// Projects Tab Stack
-const ProjectsStackNavigator: React.FC = () => {
-  const { colors } = useTheme();
-  return (
-    <ProjectsStack.Navigator
-      screenOptions={{
-        headerShown: false,
-        animation: 'slide_from_right',
-        contentStyle: { backgroundColor: colors.background },
-      }}
-    >
-      <ProjectsStack.Screen name="ProjectsList" component={ProjectsScreen} />
-      <ProjectsStack.Screen name="ProjectDetail" component={ProjectDetailScreen} />
-      <ProjectsStack.Screen
-        name="ProjectEdit"
-        component={ProjectEditScreen}
-        options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-      />
-    </ProjectsStack.Navigator>
-  );
-};
-
-// Models Tab Stack
-const ModelsStackNavigator: React.FC = () => {
-  const { colors } = useTheme();
-  return (
-    <ModelsStack.Navigator
-      screenOptions={{
-        headerShown: false,
-        animation: 'slide_from_right',
-        contentStyle: { backgroundColor: colors.background },
-      }}
-    >
-      <ModelsStack.Screen name="ModelsList" component={ModelsScreen} />
-    </ModelsStack.Navigator>
-  );
-};
-
-// Settings Tab Stack
-const SettingsStackNavigator: React.FC = () => {
-  const { colors } = useTheme();
-  return (
-    <SettingsStack.Navigator
-      screenOptions={{
-        headerShown: false,
-        animation: 'slide_from_right',
-        contentStyle: { backgroundColor: colors.background },
-      }}
-    >
-      <SettingsStack.Screen name="SettingsMain" component={SettingsScreen} />
-      <SettingsStack.Screen name="ModelSettings" component={ModelSettingsScreen} />
-      <SettingsStack.Screen name="VoiceSettings" component={VoiceSettingsScreen} />
-      <SettingsStack.Screen name="DeviceInfo" component={DeviceInfoScreen} />
-      <SettingsStack.Screen name="StorageSettings" component={StorageSettingsScreen} />
-      <SettingsStack.Screen name="SecuritySettings" component={SecuritySettingsScreen} />
-    </SettingsStack.Navigator>
-  );
-};
 
 // Animated tab icon with scale spring on focus
 const TAB_ICON_MAP: Record<string, string> = {
   HomeTab: 'home',
-  ChatsTab: 'message-circle',
-  ProjectsTab: 'folder',
-  ModelsTab: 'cpu',
-  SettingsTab: 'settings',
+  PacksTab: 'archive',
+  ObservationsTab: 'eye',
+  SyncTab: 'upload-cloud',
 };
 
 const TabBarIcon: React.FC<{ name: string; focused: boolean }> = ({ name, focused }) => {
@@ -211,52 +116,34 @@ const MainTabs: React.FC = () => {
     >
       <Tab.Screen
         name="HomeTab"
-        component={HomeScreen}
+        component={WildlifeHomeScreen}
         options={{ tabBarLabel: 'Home', tabBarButtonTestID: 'home-tab' }}
         listeners={() => ({
           tabPress: () => { triggerHaptic('selection'); },
         })}
       />
       <Tab.Screen
-        name="ChatsTab"
-        component={ChatsStackNavigator}
-        options={{ tabBarLabel: 'Chats', tabBarButtonTestID: 'chats-tab' }}
-        listeners={({ navigation }) => ({
-          tabPress: (e) => {
-            triggerHaptic('selection');
-            e.preventDefault();
-            navigation.navigate('ChatsTab', { screen: 'ChatsList' });
-          },
-        })}
-      />
-      <Tab.Screen
-        name="ProjectsTab"
-        component={ProjectsStackNavigator}
-        options={{ tabBarLabel: 'Projects', tabBarButtonTestID: 'projects-tab' }}
+        name="PacksTab"
+        component={PacksScreen}
+        options={{ tabBarLabel: 'Packs', tabBarButtonTestID: 'packs-tab' }}
         listeners={() => ({
           tabPress: () => { triggerHaptic('selection'); },
         })}
       />
       <Tab.Screen
-        name="ModelsTab"
-        component={ModelsStackNavigator}
-        options={{ tabBarLabel: 'Models', tabBarButtonTestID: 'models-tab' }}
-        listeners={({ navigation }) => ({
-          tabPress: () => {
-            triggerHaptic('selection');
-            navigation.navigate('ModelsTab', { screen: 'ModelsList' });
-          },
+        name="ObservationsTab"
+        component={ObservationsScreen}
+        options={{ tabBarLabel: 'Observations', tabBarButtonTestID: 'observations-tab' }}
+        listeners={() => ({
+          tabPress: () => { triggerHaptic('selection'); },
         })}
       />
       <Tab.Screen
-        name="SettingsTab"
-        component={SettingsStackNavigator}
-        options={{ tabBarLabel: 'Settings', tabBarButtonTestID: 'settings-tab' }}
-        listeners={({ navigation }) => ({
-          tabPress: () => {
-            triggerHaptic('selection');
-            navigation.navigate('SettingsTab', { screen: 'SettingsMain' });
-          },
+        name="SyncTab"
+        component={SyncScreen}
+        options={{ tabBarLabel: 'Sync', tabBarButtonTestID: 'sync-tab' }}
+        listeners={() => ({
+          tabPress: () => { triggerHaptic('selection'); },
         })}
       />
     </Tab.Navigator>
@@ -267,13 +154,10 @@ const MainTabs: React.FC = () => {
 export const AppNavigator: React.FC = () => {
   const { colors } = useTheme();
   const hasCompletedOnboarding = useAppStore((s) => s.hasCompletedOnboarding);
-  const downloadedModels = useAppStore((s) => s.downloadedModels);
 
-  // Determine initial route
-  let initialRoute: keyof RootStackParamList = 'Onboarding';
-  if (hasCompletedOnboarding) {
-    initialRoute = downloadedModels.length > 0 ? 'Main' : 'ModelDownload';
-  }
+  const initialRoute: keyof RootStackParamList = hasCompletedOnboarding
+    ? 'Main'
+    : 'Onboarding';
 
   return (
     <RootStack.Navigator
@@ -285,18 +169,13 @@ export const AppNavigator: React.FC = () => {
       }}
     >
       <RootStack.Screen name="Onboarding" component={OnboardingScreen} />
-      <RootStack.Screen name="ModelDownload" component={ModelDownloadScreen} />
       <RootStack.Screen name="Main" component={MainTabs} />
-      <RootStack.Screen
-        name="DownloadManager"
-        component={DownloadManagerScreen}
-        options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-      />
-      <RootStack.Screen
-        name="Gallery"
-        component={GalleryScreen}
-        options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-      />
+      <RootStack.Screen name="Capture" component={CaptureScreen} />
+      <RootStack.Screen name="DetectionResults" component={DetectionResultsScreen} />
+      <RootStack.Screen name="MatchReview" component={MatchReviewScreen} />
+      <RootStack.Screen name="ObservationDetail" component={ObservationDetailScreen} />
+      <RootStack.Screen name="PackDetails" component={PacksScreen} />
+      <RootStack.Screen name="Settings" component={SettingsScreen} />
     </RootStack.Navigator>
   );
 };

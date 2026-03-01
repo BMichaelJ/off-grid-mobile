@@ -1,9 +1,9 @@
 /**
  * AppNavigator Tests
  *
- * Tests for the main navigation setup including:
+ * Tests for the wildlife navigation setup including:
+ * - Tab bar renders all four tabs (Home, Packs, Observations, Sync)
  * - Tab bar safe area inset handling
- * - Tab bar renders all tabs
  * - Dynamic height based on device navigation mode
  */
 
@@ -53,100 +53,9 @@ jest.mock('@react-navigation/native', () => {
   };
 });
 
-// Mock services
-jest.mock('../../../src/services/activeModelService', () => ({
-  activeModelService: {
-    loadTextModel: jest.fn(() => Promise.resolve()),
-    loadImageModel: jest.fn(() => Promise.resolve()),
-    unloadTextModel: jest.fn(() => Promise.resolve()),
-    unloadImageModel: jest.fn(() => Promise.resolve()),
-    unloadAllModels: jest.fn(() => Promise.resolve({ textUnloaded: true, imageUnloaded: true })),
-    getActiveModels: jest.fn(() => ({ text: null, image: null })),
-    checkMemoryForModel: jest.fn(() => Promise.resolve({ canLoad: true, severity: 'safe', message: '' })),
-    subscribe: jest.fn(() => jest.fn()),
-    getResourceUsage: jest.fn(() => Promise.resolve({
-      textModelMemory: 0,
-      imageModelMemory: 0,
-      totalMemory: 0,
-      memoryAvailable: 4 * 1024 * 1024 * 1024,
-    })),
-    syncWithNativeState: jest.fn(),
-  },
-}));
-
-jest.mock('../../../src/services/modelManager', () => ({
-  modelManager: {
-    getDownloadedModels: jest.fn(() => Promise.resolve([])),
-    getDownloadedImageModels: jest.fn(() => Promise.resolve([])),
-  },
-}));
-
-jest.mock('../../../src/services/hardware', () => ({
-  hardwareService: {
-    getDeviceInfo: jest.fn(() => Promise.resolve({
-      totalMemory: 8 * 1024 * 1024 * 1024,
-      availableMemory: 4 * 1024 * 1024 * 1024,
-    })),
-    formatBytes: jest.fn((bytes: number) => `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`),
-    formatModelSize: jest.fn(() => '4.0 GB'),
-  },
-}));
-
 jest.mock('../../../src/utils/haptics', () => ({
   triggerHaptic: jest.fn(),
 }));
-
-// Mock AnimatedEntry / AnimatedListItem / AnimatedPressable
-jest.mock('../../../src/components/AnimatedEntry', () => ({
-  AnimatedEntry: ({ children }: any) => children,
-}));
-jest.mock('../../../src/components/AnimatedListItem', () => ({
-  AnimatedListItem: ({ children, onPress, testID, style }: any) => {
-    const { TouchableOpacity } = require('react-native');
-    return (
-      <TouchableOpacity testID={testID} style={style} onPress={onPress}>
-        {children}
-      </TouchableOpacity>
-    );
-  },
-}));
-jest.mock('../../../src/components/AnimatedPressable', () => ({
-  AnimatedPressable: ({ children, onPress, style, testID }: any) => {
-    const { TouchableOpacity } = require('react-native');
-    return <TouchableOpacity style={style} onPress={onPress} testID={testID}>{children}</TouchableOpacity>;
-  },
-}));
-
-// Mock AppSheet
-jest.mock('../../../src/components/AppSheet', () => ({
-  AppSheet: ({ visible, children }: any) => {
-    if (!visible) return null;
-    return children;
-  },
-}));
-
-// Mock components module
-jest.mock('../../../src/components', () => {
-  const actual = jest.requireActual('../../../src/components');
-  return {
-    ...actual,
-    CustomAlert: () => null,
-  };
-});
-
-// Mock useFocusTrigger
-jest.mock('../../../src/hooks/useFocusTrigger', () => ({
-  useFocusTrigger: () => 0,
-}));
-
-// Mock Swipeable
-jest.mock('react-native-gesture-handler/Swipeable', () => {
-  const RN = require('react');
-  const { View } = require('react-native');
-  return RN.forwardRef(({ children, containerStyle }: any, _ref: any) => (
-    <View style={containerStyle}>{children}</View>
-  ));
-});
 
 // Import after mocks
 import { AppNavigator } from '../../../src/navigation/AppNavigator';
@@ -178,24 +87,22 @@ describe('AppNavigator', () => {
   });
 
   describe('Tab bar rendering', () => {
-    it('renders all five tab labels', () => {
+    it('renders all four tab labels', () => {
       const { getAllByText } = renderAppNavigator();
 
       expect(getAllByText('Home').length).toBeGreaterThanOrEqual(1);
-      expect(getAllByText('Chats').length).toBeGreaterThanOrEqual(1);
-      expect(getAllByText('Projects').length).toBeGreaterThanOrEqual(1);
-      expect(getAllByText('Models').length).toBeGreaterThanOrEqual(1);
-      expect(getAllByText('Settings').length).toBeGreaterThanOrEqual(1);
+      expect(getAllByText('Packs').length).toBeGreaterThanOrEqual(1);
+      expect(getAllByText('Observations').length).toBeGreaterThanOrEqual(1);
+      expect(getAllByText('Sync').length).toBeGreaterThanOrEqual(1);
     });
 
     it('renders all tab buttons with testIDs', () => {
       const { getByTestId } = renderAppNavigator();
 
       expect(getByTestId('home-tab')).toBeTruthy();
-      expect(getByTestId('chats-tab')).toBeTruthy();
-      expect(getByTestId('projects-tab')).toBeTruthy();
-      expect(getByTestId('models-tab')).toBeTruthy();
-      expect(getByTestId('settings-tab')).toBeTruthy();
+      expect(getByTestId('packs-tab')).toBeTruthy();
+      expect(getByTestId('observations-tab')).toBeTruthy();
+      expect(getByTestId('sync-tab')).toBeTruthy();
     });
   });
 
@@ -275,17 +182,15 @@ describe('AppNavigator', () => {
 
       // All tab labels should be visible
       expect(getAllByText('Home').length).toBeGreaterThanOrEqual(1);
-      expect(getAllByText('Chats').length).toBeGreaterThanOrEqual(1);
-      expect(getAllByText('Projects').length).toBeGreaterThanOrEqual(1);
-      expect(getAllByText('Models').length).toBeGreaterThanOrEqual(1);
-      expect(getAllByText('Settings').length).toBeGreaterThanOrEqual(1);
+      expect(getAllByText('Packs').length).toBeGreaterThanOrEqual(1);
+      expect(getAllByText('Observations').length).toBeGreaterThanOrEqual(1);
+      expect(getAllByText('Sync').length).toBeGreaterThanOrEqual(1);
 
       // All tab buttons should be pressable
       expect(getByTestId('home-tab')).toBeTruthy();
-      expect(getByTestId('chats-tab')).toBeTruthy();
-      expect(getByTestId('projects-tab')).toBeTruthy();
-      expect(getByTestId('models-tab')).toBeTruthy();
-      expect(getByTestId('settings-tab')).toBeTruthy();
+      expect(getByTestId('packs-tab')).toBeTruthy();
+      expect(getByTestId('observations-tab')).toBeTruthy();
+      expect(getByTestId('sync-tab')).toBeTruthy();
     });
   });
 });

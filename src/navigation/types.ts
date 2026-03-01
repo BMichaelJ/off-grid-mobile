@@ -1,23 +1,35 @@
-import { NavigatorScreenParams } from '@react-navigation/native';
+import type { NavigatorScreenParams } from '@react-navigation/native';
+
+// ============================================================================
+// Wildlife navigation types
+// ============================================================================
 
 export type RootStackParamList = {
   Onboarding: undefined;
+  Main: NavigatorScreenParams<MainTabParamList> | undefined;
+  PackDetails: { packId: string };
+  Capture: undefined;
+  DetectionResults: { observationId: string };
+  MatchReview: { observationId: string; detectionId: string };
+  ObservationDetail: { observationId: string };
+  Settings: undefined;
+  // Legacy routes - will be removed in Task 6.4
   ModelDownload: undefined;
-  Main: undefined;
   DownloadManager: undefined;
   Gallery: { conversationId?: string } | undefined;
 };
 
-// Tab navigator params
 export type MainTabParamList = {
   HomeTab: undefined;
-  ChatsTab: NavigatorScreenParams<ChatsStackParamList> | undefined;
-  ProjectsTab: NavigatorScreenParams<ProjectsStackParamList> | undefined;
-  ModelsTab: NavigatorScreenParams<ModelsStackParamList> | undefined;
-  SettingsTab: NavigatorScreenParams<SettingsStackParamList> | undefined;
+  PacksTab: undefined;
+  ObservationsTab: undefined;
+  SyncTab: undefined;
 };
 
-// Stack navigators within tabs
+// ============================================================================
+// Legacy types - will be removed in Task 6.4
+// ============================================================================
+
 export type HomeStackParamList = {
   Home: undefined;
 };
@@ -30,7 +42,7 @@ export type ChatsStackParamList = {
 export type ProjectsStackParamList = {
   ProjectsList: undefined;
   ProjectDetail: { projectId: string };
-  ProjectEdit: { projectId?: string }; // undefined = new project
+  ProjectEdit: { projectId?: string };
   ProjectChats: { projectId: string };
 };
 

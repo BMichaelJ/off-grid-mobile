@@ -17,3 +17,13 @@ export { VoiceSettingsScreen } from './VoiceSettingsScreen';
 export { DeviceInfoScreen } from './DeviceInfoScreen';
 export { StorageSettingsScreen } from './StorageSettingsScreen';
 export { SecuritySettingsScreen } from './SecuritySettingsScreen';
+
+// Wildlife screens
+export { WildlifeHomeScreen } from './WildlifeHomeScreen';
+export { PacksScreen } from './PacksScreen';
+export { CaptureScreen } from './CaptureScreen';
+export { DetectionResultsScreen } from './DetectionResultsScreen';
+export { MatchReviewScreen } from './MatchReviewScreen';
+export { ObservationsScreen } from './ObservationsScreen';
+export { ObservationDetailScreen } from './ObservationDetailScreen';
+export { SyncScreen } from './SyncScreen';
