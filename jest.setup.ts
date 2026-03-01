@@ -385,5 +385,5 @@ beforeEach(() => {
   clearMockStorage();
 });
 
-// Global timeout for async operations
-jest.setTimeout(10000);
+// Global timeout for async operations — must match jest.config.js testTimeout
+jest.setTimeout(60000);

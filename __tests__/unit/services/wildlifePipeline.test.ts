@@ -124,7 +124,7 @@ describe('WildlifePipeline', () => {
     const config = makeSpeciesConfig();
     const result = await wildlifePipeline.processPhoto({
       photoUri: 'file:///photos/zebra.jpg',
-      gps: { lat: -1.5, lon: 36.8 },
+      gps: { lat: -1.5, lon: 36.8, accuracy: 5 },
       speciesConfigs: [config],
       miewidModelPath: '/models/miewid.onnx',
     });
@@ -286,7 +286,7 @@ describe('WildlifePipeline', () => {
 
     const result = await wildlifePipeline.processPhoto({
       photoUri: 'file:///photos/multi.jpg',
-      gps: { lat: -1.5, lon: 36.8 },
+      gps: { lat: -1.5, lon: 36.8, accuracy: 10 },
       speciesConfigs: [zebraConfig, giraffeConfig],
       miewidModelPath: '/models/miewid.onnx',
     });
