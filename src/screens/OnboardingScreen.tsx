@@ -147,7 +147,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
 
   const completeOnboarding = () => {
     setOnboardingComplete(true);
-    navigation.replace('ModelDownload');
+    navigation.replace('Main');
   };
 
   const renderSlide = ({ item, index }: { item: typeof ONBOARDING_SLIDES[0]; index: number }) => (

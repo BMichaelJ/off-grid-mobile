@@ -13,10 +13,8 @@ export type RootStackParamList = {
   MatchReview: { observationId: string; detectionId: string };
   ObservationDetail: { observationId: string };
   Settings: undefined;
-  // Legacy routes - will be removed in Task 6.4
-  ModelDownload: undefined;
-  DownloadManager: undefined;
-  Gallery: { conversationId?: string } | undefined;
+  SecuritySettings: undefined;
+  PassphraseSetup: undefined;
 };
 
 export type MainTabParamList = {
@@ -26,38 +24,9 @@ export type MainTabParamList = {
   SyncTab: undefined;
 };
 
-// ============================================================================
-// Legacy types - will be removed in Task 6.4
-// ============================================================================
-
-export type HomeStackParamList = {
-  Home: undefined;
-};
-
-export type ChatsStackParamList = {
-  ChatsList: undefined;
-  Chat: { conversationId?: string; projectId?: string };
-};
-
-export type ProjectsStackParamList = {
-  ProjectsList: undefined;
-  ProjectDetail: { projectId: string };
-  ProjectEdit: { projectId?: string };
-  ProjectChats: { projectId: string };
-};
-
-export type ModelsStackParamList = {
-  ModelsList: undefined;
-  ModelDetail: { modelId: string };
-};
-
+// Settings navigation (for SettingsScreen internal navigation)
 export type SettingsStackParamList = {
   SettingsMain: undefined;
-  ModelSettings: undefined;
-  VoiceSettings: undefined;
-  DeviceInfo: undefined;
-  StorageSettings: undefined;
   SecuritySettings: undefined;
   PassphraseSetup: undefined;
-  ChangePassphrase: undefined;
 };

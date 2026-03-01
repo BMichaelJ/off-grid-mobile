@@ -28,22 +28,6 @@ jest.mock('../src/services', () => ({
         isEmulator: false,
       }),
     ),
-    getModelRecommendation: jest.fn(() => ({
-      recommended: 'small',
-      reason: 'test',
-    })),
-  },
-  modelManager: {
-    initialize: jest.fn(() => Promise.resolve()),
-    cleanupMMProjEntries: jest.fn(() => Promise.resolve()),
-    setBackgroundDownloadMetadataCallback: jest.fn(),
-    syncBackgroundDownloads: jest.fn(() => Promise.resolve([])),
-    syncCompletedImageDownloads: jest.fn(() => Promise.resolve([])),
-    restoreInProgressDownloads: jest.fn(() => Promise.resolve([])),
-    watchDownload: jest.fn(),
-    refreshModelLists: jest.fn(() =>
-      Promise.resolve({ textModels: [], imageModels: [] }),
-    ),
   },
   authService: {
     hasPassphrase: jest.fn(() => Promise.resolve(false)),

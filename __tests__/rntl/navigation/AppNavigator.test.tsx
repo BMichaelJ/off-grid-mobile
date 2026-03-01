@@ -11,7 +11,7 @@ import React from 'react';
 import { render } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { useAppStore } from '../../../src/stores/appStore';
-import { resetStores, setupWithActiveModel } from '../../utils/testHelpers';
+import { resetStores } from '../../utils/testHelpers';
 import { createDeviceInfo } from '../../utils/factories';
 
 // Mock requestAnimationFrame
@@ -79,7 +79,6 @@ describe('AppNavigator', () => {
     mockInsets.left = 0;
 
     // Setup store so we land on Main tabs
-    setupWithActiveModel();
     useAppStore.setState({
       hasCompletedOnboarding: true,
       deviceInfo: createDeviceInfo(),

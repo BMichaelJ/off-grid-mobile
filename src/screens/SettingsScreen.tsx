@@ -81,11 +81,7 @@ export const SettingsScreen: React.FC = () => {
         {/* Navigation Items */}
         <View style={styles.navSection}>
           {[
-            { icon: 'sliders', title: 'Model Settings', desc: 'System prompt, generation, and performance', screen: 'ModelSettings' as const },
-            { icon: 'mic', title: 'Voice Transcription', desc: 'On-device speech to text', screen: 'VoiceSettings' as const },
             { icon: 'lock', title: 'Security', desc: 'Passphrase and app lock', screen: 'SecuritySettings' as const },
-            { icon: 'smartphone', title: 'Device Information', desc: 'Hardware and compatibility', screen: 'DeviceInfo' as const },
-            { icon: 'hard-drive', title: 'Storage', desc: 'Models and data usage', screen: 'StorageSettings' as const },
           ].map((item, index, arr) => (
             <AnimatedListItem
               key={item.screen}
@@ -108,35 +104,35 @@ export const SettingsScreen: React.FC = () => {
         </View>
 
         {/* About */}
-        <AnimatedEntry index={6} staggerMs={40} trigger={focusTrigger}>
+        <AnimatedEntry index={2} staggerMs={40} trigger={focusTrigger}>
           <Card style={styles.section}>
             <View style={styles.aboutRow}>
               <Text style={styles.aboutLabel}>Version</Text>
               <Text style={styles.aboutValue}>{packageJson.version}</Text>
             </View>
             <Text style={styles.aboutText}>
-              Off Grid brings AI to your device without compromising your privacy.
+              WildMe brings wildlife re-identification to your device without compromising your privacy.
             </Text>
           </Card>
         </AnimatedEntry>
 
         {/* Privacy */}
-        <AnimatedEntry index={7} staggerMs={40} trigger={focusTrigger}>
+        <AnimatedEntry index={3} staggerMs={40} trigger={focusTrigger}>
           <Card style={styles.privacyCard}>
             <View style={styles.privacyIconContainer}>
               <Icon name="shield" size={18} color={colors.textSecondary} />
             </View>
             <Text style={styles.privacyTitle}>Privacy First</Text>
             <Text style={styles.privacyText}>
-              All your data stays on this device. No conversations, prompts, or
-              personal information is ever sent to any server.
+              All your data stays on this device. No photos, observations, or
+              personal information is ever sent to any server without your consent.
             </Text>
           </Card>
         </AnimatedEntry>
 
         {/* Dev-only: Reset Onboarding */}
         {__DEV__ && (
-          <AnimatedEntry index={8} staggerMs={40} trigger={focusTrigger}>
+          <AnimatedEntry index={4} staggerMs={40} trigger={focusTrigger}>
             <TouchableOpacity style={styles.devButton} onPress={handleResetOnboarding}>
               <Icon name="rotate-ccw" size={14} color={colors.textMuted} />
               <Text style={styles.devButtonText}>Reset Onboarding</Text>

@@ -122,7 +122,7 @@ describe('OnboardingScreen', () => {
     fireEvent.press(getByText('Skip'));
 
     expect(mockSetOnboardingComplete).toHaveBeenCalledWith(true);
-    expect(mockReplace).toHaveBeenCalledWith('ModelDownload');
+    expect(mockReplace).toHaveBeenCalledWith('Main');
   });
 
   it('does not complete onboarding when Next is pressed on non-last slide', () => {
@@ -182,6 +182,6 @@ describe('OnboardingScreen', () => {
     fireEvent.press(getByTestId('onboarding-next'));
 
     expect(mockSetOnboardingComplete).toHaveBeenCalledWith(true);
-    expect(mockReplace).toHaveBeenCalledWith('ModelDownload');
+    expect(mockReplace).toHaveBeenCalledWith('Main');
   });
 });

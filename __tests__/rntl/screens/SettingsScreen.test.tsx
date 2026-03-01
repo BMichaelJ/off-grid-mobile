@@ -91,56 +91,21 @@ describe('SettingsScreen', () => {
     expect(getByText('1.0.0')).toBeTruthy();
   });
 
-  it('renders navigation items', () => {
+  it('renders Security navigation item', () => {
     const { getByText } = render(<SettingsScreen />);
-    expect(getByText('Model Settings')).toBeTruthy();
-    expect(getByText('Voice Transcription')).toBeTruthy();
     expect(getByText('Security')).toBeTruthy();
-    expect(getByText('Device Information')).toBeTruthy();
-    expect(getByText('Storage')).toBeTruthy();
-  });
-
-  it('renders navigation item descriptions', () => {
-    const { getByText } = render(<SettingsScreen />);
-    expect(getByText('System prompt, generation, and performance')).toBeTruthy();
-    expect(getByText('On-device speech to text')).toBeTruthy();
     expect(getByText('Passphrase and app lock')).toBeTruthy();
-    expect(getByText('Hardware and compatibility')).toBeTruthy();
-    expect(getByText('Models and data usage')).toBeTruthy();
   });
 
-  it('navigates to correct screen when nav item is pressed', () => {
+  it('navigates to SecuritySettings when Security is pressed', () => {
     const { getByText } = render(<SettingsScreen />);
-    fireEvent.press(getByText('Model Settings'));
-    expect(mockNavigate).toHaveBeenCalledWith('ModelSettings');
-  });
-
-  it('navigates to each settings screen', () => {
-    const { getByText } = render(<SettingsScreen />);
-
-    fireEvent.press(getByText('Voice Transcription'));
-    expect(mockNavigate).toHaveBeenCalledWith('VoiceSettings');
-
     fireEvent.press(getByText('Security'));
     expect(mockNavigate).toHaveBeenCalledWith('SecuritySettings');
-
-    fireEvent.press(getByText('Device Information'));
-    expect(mockNavigate).toHaveBeenCalledWith('DeviceInfo');
-
-    fireEvent.press(getByText('Storage'));
-    expect(mockNavigate).toHaveBeenCalledWith('StorageSettings');
   });
 
-  it('renders theme selector with system/light/dark options', () => {
+  it('renders theme selector with Appearance label', () => {
     const { getByText } = render(<SettingsScreen />);
     expect(getByText('Appearance')).toBeTruthy();
-  });
-
-  it('calls setThemeMode when theme option is pressed', () => {
-    render(<SettingsScreen />);
-    // The theme options are the first three TouchableOpacity elements in the theme selector
-    // We can't easily target them by text since they use icons, but pressing them calls setThemeMode
-    // The three theme options are rendered - pressing one calls setThemeMode
   });
 
   it('renders Privacy First section', () => {
@@ -154,7 +119,7 @@ describe('SettingsScreen', () => {
   it('renders about section text', () => {
     const { getByText } = render(<SettingsScreen />);
     expect(getByText('Version')).toBeTruthy();
-    expect(getByText(/Off Grid brings AI/)).toBeTruthy();
+    expect(getByText(/WildMe brings wildlife/)).toBeTruthy();
   });
 
   it('renders Reset Onboarding button in __DEV__ mode', () => {

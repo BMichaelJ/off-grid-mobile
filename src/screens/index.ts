@@ -1,21 +1,7 @@
 export { OnboardingScreen } from './OnboardingScreen';
-export { ModelDownloadScreen } from './ModelDownloadScreen';
-export { HomeScreen } from './HomeScreen';
-export { ModelsScreen } from './ModelsScreen';
-export { ChatScreen } from './ChatScreen';
 export { SettingsScreen } from './SettingsScreen';
-export { GalleryScreen } from './GalleryScreen';
-export { ProjectsScreen } from './ProjectsScreen';
-export { ProjectDetailScreen } from './ProjectDetailScreen';
-export { ProjectEditScreen } from './ProjectEditScreen';
-export { ChatsListScreen } from './ChatsListScreen';
 export { LockScreen } from './LockScreen';
 export { PassphraseSetupScreen } from './PassphraseSetupScreen';
-export { DownloadManagerScreen } from './DownloadManagerScreen';
-export { ModelSettingsScreen } from './ModelSettingsScreen';
-export { VoiceSettingsScreen } from './VoiceSettingsScreen';
-export { DeviceInfoScreen } from './DeviceInfoScreen';
-export { StorageSettingsScreen } from './StorageSettingsScreen';
 export { SecuritySettingsScreen } from './SecuritySettingsScreen';
 
 // Wildlife screens

@@ -1,130 +1,3 @@
-export { MODEL_RECOMMENDATIONS, RECOMMENDED_MODELS, MODEL_ORGS, QUANTIZATION_INFO } from './models';
-
-// Hugging Face API configuration
-export const HF_API = {
-  baseUrl: 'https://huggingface.co',
-  apiUrl: 'https://huggingface.co/api',
-  modelsEndpoint: '/models',
-  searchParams: {
-    filter: 'gguf',
-    sort: 'downloads',
-    direction: '-1',
-    limit: 30,
-  },
-};
-
-// Model credibility configuration
-// LM Studio community - highest credibility for GGUF models
-export const LMSTUDIO_AUTHORS = [
-  'lmstudio-community',
-  'lmstudio-ai',
-];
-
-// Official model creators - these are the original model authors
-export const OFFICIAL_MODEL_AUTHORS: Record<string, string> = {
-  'meta-llama': 'Meta',
-  'microsoft': 'Microsoft',
-  'google': 'Google',
-  'Qwen': 'Alibaba',
-  'mistralai': 'Mistral AI',
-  'HuggingFaceTB': 'Hugging Face',
-  'HuggingFaceH4': 'Hugging Face',
-  'bigscience': 'BigScience',
-  'EleutherAI': 'EleutherAI',
-  'tiiuae': 'TII UAE',
-  'stabilityai': 'Stability AI',
-  'databricks': 'Databricks',
-  'THUDM': 'Tsinghua University',
-  'baichuan-inc': 'Baichuan',
-  'internlm': 'InternLM',
-  '01-ai': '01.AI',
-  'deepseek-ai': 'DeepSeek',
-  'CohereForAI': 'Cohere',
-  'allenai': 'Allen AI',
-  'nvidia': 'NVIDIA',
-  'apple': 'Apple',
-};
-
-// Verified quantizers - trusted community members who quantize models
-export const VERIFIED_QUANTIZERS: Record<string, string> = {
-  'TheBloke': 'TheBloke',
-  'bartowski': 'bartowski',
-  'QuantFactory': 'QuantFactory',
-  'mradermacher': 'mradermacher',
-  'second-state': 'Second State',
-  'MaziyarPanahi': 'Maziyar Panahi',
-  'Triangle104': 'Triangle104',
-  'unsloth': 'Unsloth',
-  'ggml-org': 'GGML (HuggingFace)',
-};
-
-// Credibility level labels
-export const CREDIBILITY_LABELS = {
-  lmstudio: {
-    label: 'LM Studio',
-    description: 'Official LM Studio quantization - highest quality GGUF',
-    color: '#22D3EE', // cyan
-  },
-  official: {
-    label: 'Official',
-    description: 'From the original model creator',
-    color: '#22C55E', // green
-  },
-  'verified-quantizer': {
-    label: 'Verified',
-    description: 'From a trusted quantization provider',
-    color: '#A78BFA', // purple
-  },
-  community: {
-    label: 'Community',
-    description: 'Community contributed model',
-    color: '#64748B', // gray
-  },
-};
-
-// App configuration
-export const APP_CONFIG = {
-  modelStorageDir: 'models',
-  maxConcurrentDownloads: 1,
-  defaultSystemPrompt: `You are a helpful AI assistant running locally on the user's device. Your responses should be:
-- Accurate and factual - never make up information
-- Concise but complete - answer the question fully without unnecessary elaboration
-- Helpful and friendly - focus on solving the user's actual need
-- Honest about limitations - if you don't know something, say so
-
-If asked about yourself, you can mention you're a local AI assistant that prioritizes user privacy.`,
-  streamingEnabled: true,
-  maxContextLength: 2048, // Balanced for speed and context (increase to 4096 if you need more history)
-};
-
-// Onboarding slides
-export const ONBOARDING_SLIDES = [
-  {
-    id: 'freedom',
-    keyword: 'YOURS',
-    title: 'Your AI.\nNo Strings Attached.',
-    description: 'No subscriptions, no sign-ups, no company reading your chats. An AI that lives on your device and answers to no one else.',
-  },
-  {
-    id: 'magic',
-    keyword: 'MAGIC',
-    title: 'Just Talk.\nIt Figures Out the Rest.',
-    description: 'Describe an image \u2014 it creates one. Show it a photo \u2014 it understands. Attach a document \u2014 it reads it. One conversation, no modes, no friction.',
-  },
-  {
-    id: 'create',
-    keyword: 'CREATE',
-    title: 'Say It Simply.\nGet Something Stunning.',
-    description: 'Type \u201Cimagine a cat on the moon\u201D and watch your words become a vivid image in seconds. AI enhances your ideas automatically \u2014 no prompt engineering needed.',
-  },
-  {
-    id: 'hardware',
-    keyword: 'READY',
-    title: 'Tuned for\nYour Hardware.',
-    description: 'Accelerated for Metal, NPU, and Neural Engine. We\u2019ll recommend the perfect model for your phone \u2014 so it flies from the start.',
-  },
-];
-
 // Fonts
 export const FONTS = {
   mono: 'Menlo',
@@ -209,3 +82,30 @@ export const SPACING = {
   xxl: 32,
 };
 
+// Onboarding slides
+export const ONBOARDING_SLIDES = [
+  {
+    id: 'welcome',
+    keyword: 'WILDME',
+    title: 'Wildlife\nRe-identification.',
+    description: 'Identify and track individual animals using on-device AI. No cloud required.',
+  },
+  {
+    id: 'capture',
+    keyword: 'CAPTURE',
+    title: 'Snap a Photo.\nAI Does the Rest.',
+    description: 'Take a photo in the field and our detector finds every animal. Embeddings match them to known individuals instantly.',
+  },
+  {
+    id: 'privacy',
+    keyword: 'PRIVATE',
+    title: 'Your Data\nStays on Device.',
+    description: 'All detection, embedding, and matching runs locally. Sync only when you choose to.',
+  },
+  {
+    id: 'hardware',
+    keyword: 'READY',
+    title: 'Tuned for\nYour Hardware.',
+    description: 'Optimized for on-device inference. We detect your hardware and configure the pipeline automatically.',
+  },
+];
