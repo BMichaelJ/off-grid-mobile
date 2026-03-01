@@ -16,8 +16,10 @@ import { useAppStore } from '../stores';
 import {
   OnboardingScreen,
   SettingsScreen,
+  SecuritySettingsScreen,
   WildlifeHomeScreen,
   PacksScreen,
+  PackDetailScreen,
   CaptureScreen,
   DetectionResultsScreen,
   MatchReviewScreen,
@@ -174,8 +176,9 @@ export const AppNavigator: React.FC = () => {
       <RootStack.Screen name="DetectionResults" component={DetectionResultsScreen} />
       <RootStack.Screen name="MatchReview" component={MatchReviewScreen} />
       <RootStack.Screen name="ObservationDetail" component={ObservationDetailScreen} />
-      <RootStack.Screen name="PackDetails" component={PacksScreen} />
+      <RootStack.Screen name="PackDetails" component={PackDetailScreen} />
       <RootStack.Screen name="Settings" component={SettingsScreen} />
+      <RootStack.Screen name="SecuritySettings" component={SecuritySettingsScreen} />
     </RootStack.Navigator>
   );
 };

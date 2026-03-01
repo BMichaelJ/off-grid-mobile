@@ -7,6 +7,7 @@ export { SecuritySettingsScreen } from './SecuritySettingsScreen';
 // Wildlife screens
 export { WildlifeHomeScreen } from './WildlifeHomeScreen';
 export { PacksScreen } from './PacksScreen';
+export { PackDetailScreen } from './PackDetailScreen';
 export { CaptureScreen } from './CaptureScreen';
 export { DetectionResultsScreen } from './DetectionResultsScreen';
 export { MatchReviewScreen } from './MatchReviewScreen';
