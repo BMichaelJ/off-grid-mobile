@@ -1,0 +1,75 @@
+import type { ThemeColors, ThemeShadows } from '../../theme';
+import { TYPOGRAPHY, SPACING } from '../../constants';
+
+export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  header: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+  },
+  headerTitle: {
+    ...TYPOGRAPHY.h2,
+    color: colors.text,
+  },
+  backButton: {
+    padding: SPACING.xs,
+  },
+  photoContainer: {
+    flex: 1,
+    position: 'relative' as const,
+  },
+  photo: {
+    width: '100%' as const,
+    height: '100%' as const,
+  },
+  overlayContainer: {
+    position: 'absolute' as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  footer: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+  },
+  saveAllButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.xl,
+    borderRadius: 12,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    flexDirection: 'row' as const,
+    gap: SPACING.sm,
+  },
+  saveAllText: {
+    ...TYPOGRAPHY.h2,
+    color: colors.background,
+  },
+  // Bounding box styles
+  boundingBox: {
+    position: 'absolute' as const,
+    borderWidth: 2,
+    borderRadius: 4,
+    justifyContent: 'flex-end' as const,
+  },
+  boxLabel: {
+    paddingHorizontal: SPACING.xs,
+    paddingVertical: 2,
+  },
+  boxLabelText: {
+    ...TYPOGRAPHY.labelSmall,
+    color: '#FFFFFF',
+  },
+  boxConfidenceText: {
+    ...TYPOGRAPHY.metaSmall,
+    color: '#FFFFFF',
+  },
+});
