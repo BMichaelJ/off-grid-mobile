@@ -33,10 +33,10 @@ fi
 # ── Kotlin / Android ───────────────────────────────────────────────────────────
 if [ -n "$STAGED_KOTLIN" ]; then
   echo "▶ Kotlin type check (compileDebugKotlin)..."
-  (cd android && ./gradlew compileDebugKotlin --quiet)
+  (cd android && ./gradlew :app:compileDebugKotlin --quiet)
 
   echo "▶ Android lint..."
-  (cd android && ./gradlew lintDebug --quiet)
+  (cd android && ./gradlew :app:lintDebug --quiet)
 
   echo "▶ Android tests..."
   npm run test:android

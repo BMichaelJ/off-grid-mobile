@@ -10,7 +10,11 @@ jest.mock('onnxruntime-react-native', () => ({
   InferenceSession: {
     create: jest.fn(),
   },
-  Tensor: jest.fn(),
+  Tensor: jest.fn((type: string, data: unknown, dims: number[]) => ({
+    type,
+    data,
+    dims,
+  })),
 }));
 
 const makeDetectorConfig = (
@@ -105,53 +109,152 @@ describe('OnnxInferenceService', () => {
   });
 
   describe('runDetection', () => {
-    it('should return stub results', async () => {
+    it('should throw if model is not loaded', async () => {
+      await expect(
+        onnxInferenceService.runDetection(
+          'file:///photo.jpg',
+          '/not/loaded.onnx',
+          makeDetectorConfig(),
+        ),
+      ).rejects.toThrow('Detector model not loaded');
+    });
+
+    it('should preprocess, run session, and parse output', async () => {
+      const { InferenceSession, Tensor } = require('onnxruntime-react-native');
+      const mockOutputData = new Float32Array([
+        320, 320, 200, 100, 0.9, // one detection above threshold
+      ]);
+      const mockSession = {
+        release: jest.fn(),
+        inputNames: ['input'],
+        outputNames: ['output'],
+        run: jest.fn().mockResolvedValue({
+          output: { data: mockOutputData },
+        }),
+      };
+      InferenceSession.create.mockResolvedValue(mockSession);
+
+      await onnxInferenceService.loadModel('/detector.onnx', 'detector');
+
+      const config = makeDetectorConfig({
+        inputSize: [640, 640],
+        confidenceThreshold: 0.5,
+        classLabels: ['zebra'],
+      });
       const result = await onnxInferenceService.runDetection(
         'file:///photo.jpg',
-        '/path/to/detector.onnx',
-        {} as any,
+        '/detector.onnx',
+        config,
       );
-      expect(result).toHaveProperty('results');
-      expect(result).toHaveProperty('inferenceTimeMs');
+
+      expect(mockSession.run).toHaveBeenCalledTimes(1);
+      expect(Tensor).toHaveBeenCalled();
+      expect(result.results).toHaveLength(1);
+      expect(result.results[0].species).toBe('zebra');
+      expect(result.inferenceTimeMs).toBeGreaterThanOrEqual(0);
     });
   });
 
   describe('extractEmbedding', () => {
-    it('should return stub results', async () => {
+    it('should throw if model is not loaded', async () => {
+      await expect(
+        onnxInferenceService.extractEmbedding(
+          'file:///crop.jpg',
+          '/not/loaded.onnx',
+        ),
+      ).rejects.toThrow('Embedding model not loaded');
+    });
+
+    it('should preprocess, run session, and return embedding', async () => {
+      const { InferenceSession } = require('onnxruntime-react-native');
+      const mockEmbedding = new Float32Array([0.1, 0.2, 0.3, 0.4]);
+      const mockSession = {
+        release: jest.fn(),
+        inputNames: ['input'],
+        outputNames: ['embedding'],
+        run: jest.fn().mockResolvedValue({
+          embedding: { data: mockEmbedding },
+        }),
+      };
+      InferenceSession.create.mockResolvedValue(mockSession);
+
+      await onnxInferenceService.loadModel('/miewid.onnx', 'embedding');
+
       const result = await onnxInferenceService.extractEmbedding(
         'file:///crop.jpg',
-        '/path/to/miewid.onnx',
+        '/miewid.onnx',
       );
-      expect(result).toHaveProperty('embedding');
-      expect(result).toHaveProperty('inferenceTimeMs');
+
+      expect(mockSession.run).toHaveBeenCalledTimes(1);
+      expect(result.embedding).toHaveLength(4);
+      expect(result.embedding[0]).toBeCloseTo(0.1, 5);
+      expect(result.embedding[1]).toBeCloseTo(0.2, 5);
+      expect(result.embedding[2]).toBeCloseTo(0.3, 5);
+      expect(result.embedding[3]).toBeCloseTo(0.4, 5);
+      expect(result.inferenceTimeMs).toBeGreaterThanOrEqual(0);
     });
   });
 });
 
 describe('preprocessImageForDetection', () => {
-  it('should return a Float32Array with correct dimensions for 640x640 config', async () => {
+  it('should call ImageTensorModule and return Float32Array', async () => {
+    const { ImageTensorModule } = require('../../../src/services/onnxInferenceService/nativeImageTensor');
+    const mockData = [1.0, 2.0, 3.0];
+    (ImageTensorModule.imageToTensor as jest.Mock).mockResolvedValueOnce(mockData);
+
     const config = makeDetectorConfig({ inputSize: [640, 640], inputChannels: 3 });
     const result = await preprocessImageForDetection('file:///photo.jpg', config);
 
+    expect(ImageTensorModule.imageToTensor).toHaveBeenCalledWith(
+      'file:///photo.jpg',
+      640, 640,
+      config.normalize.mean,
+      config.normalize.std,
+      config.normalize.scale,
+      config.channelOrder,
+    );
     expect(result).toBeInstanceOf(Float32Array);
-    expect(result.length).toBe(3 * 640 * 640);
-  });
-
-  it('should return a Float32Array with correct dimensions for non-square config', async () => {
-    const config = makeDetectorConfig({ inputSize: [320, 480], inputChannels: 3 });
-    const result = await preprocessImageForDetection('file:///photo.jpg', config);
-
-    expect(result).toBeInstanceOf(Float32Array);
-    expect(result.length).toBe(3 * 320 * 480);
+    expect(Array.from(result)).toEqual(mockData);
   });
 });
 
 describe('preprocessImageForEmbedding', () => {
-  it('should return a Float32Array with correct dimensions (3*440*440)', async () => {
+  it('should call ImageTensorModule with default MiewID params', async () => {
+    const { ImageTensorModule } = require('../../../src/services/onnxInferenceService/nativeImageTensor');
+    const mockData = [0.5, 0.6, 0.7];
+    (ImageTensorModule.imageToTensor as jest.Mock).mockResolvedValueOnce(mockData);
+
     const result = await preprocessImageForEmbedding('file:///crop.jpg');
 
+    expect(ImageTensorModule.imageToTensor).toHaveBeenCalledWith(
+      'file:///crop.jpg',
+      440, 440,
+      [0.485, 0.456, 0.406],
+      [0.229, 0.224, 0.225],
+      1.0,
+      'RGB',
+    );
     expect(result).toBeInstanceOf(Float32Array);
-    expect(result.length).toBe(3 * 440 * 440);
+  });
+
+  it('should accept custom inputSize and normalize params', async () => {
+    const { ImageTensorModule } = require('../../../src/services/onnxInferenceService/nativeImageTensor');
+    (ImageTensorModule.imageToTensor as jest.Mock).mockResolvedValueOnce([]);
+
+    await preprocessImageForEmbedding(
+      'file:///crop.jpg',
+      [224, 224],
+      { mean: [0.5, 0.5, 0.5], std: [0.5, 0.5, 0.5] },
+    );
+
+    expect(ImageTensorModule.imageToTensor).toHaveBeenCalledWith(
+      'file:///crop.jpg',
+      224, 224,
+      [0.5, 0.5, 0.5],
+      [0.5, 0.5, 0.5],
+      1.0,
+      'RGB',
+    );
   });
 });
 

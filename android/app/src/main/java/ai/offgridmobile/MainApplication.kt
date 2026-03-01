@@ -8,6 +8,7 @@ import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import ai.offgridmobile.download.DownloadManagerPackage
 import ai.offgridmobile.localdream.LocalDreamPackage
+import ai.offgridmobile.imagetensor.ImageTensorPackage
 import ai.offgridmobile.pdf.PDFExtractorPackage
 
 class MainApplication : Application(), ReactApplication {
@@ -19,6 +20,7 @@ class MainApplication : Application(), ReactApplication {
         PackageList(this).packages.apply {
           // Packages that cannot be autolinked yet can be added manually here, for example:
           add(DownloadManagerPackage())
+          add(ImageTensorPackage())
           add(LocalDreamPackage())
           add(PDFExtractorPackage())
         },

@@ -1,13 +1,22 @@
 import type { Detection } from '../../types';
 import { onnxInferenceService } from '../onnxInferenceService';
 import { embeddingMatchService } from '../embeddingMatchService';
+import { ImageTensorModule } from '../onnxInferenceService/nativeImageTensor';
 import { generateId } from '../../utils/generateId';
 import logger from '../../utils/logger';
 import type { ProcessPhotoParams, PipelineResult } from './types';
 
+const RNFS = require('react-native-fs');
+
 class WildlifePipeline {
   async processPhoto(params: ProcessPhotoParams): Promise<PipelineResult> {
-    const { photoUri, speciesConfigs, miewidModelPath } = params;
+    const {
+      photoUri,
+      speciesConfigs,
+      miewidModelPath,
+      embeddingInputSize,
+      embeddingNormalize,
+    } = params;
     const observationId = generateId();
     const detections: Detection[] = [];
     let totalInferenceTimeMs = 0;
@@ -39,15 +48,30 @@ class WildlifePipeline {
         await onnxInferenceService.loadModel(miewidModelPath, 'embedding');
       }
 
+      // Create crops directory
+      const cropsDir = `${RNFS.CachesDirectoryPath}/crops`;
+      await RNFS.mkdir(cropsDir);
+
       // Process each detection
       for (const result of detectionOutput.results) {
         const detectionId = generateId();
-        const croppedImageUri = `file:///crops/${detectionId}.jpg`;
 
-        // Extract embedding
+        // Crop the detected region from the original photo
+        const cropPath = `${cropsDir}/${detectionId}.jpg`;
+        const croppedImageUri = await ImageTensorModule.cropImage(
+          photoUri,
+          result.boundingBox.x,
+          result.boundingBox.y,
+          result.boundingBox.width,
+          result.boundingBox.height,
+          cropPath,
+        );
+
+        // Extract embedding from the cropped region
         const embeddingOutput = await onnxInferenceService.extractEmbedding(
           croppedImageUri,
           miewidModelPath,
+          { inputSize: embeddingInputSize, normalize: embeddingNormalize },
         );
         totalInferenceTimeMs += embeddingOutput.inferenceTimeMs;
 

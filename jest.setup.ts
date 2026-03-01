@@ -152,8 +152,23 @@ jest.mock('onnxruntime-react-native', () => ({
       run: jest.fn(() => Promise.resolve({})),
     })),
   },
-  Tensor: jest.fn(),
+  Tensor: jest.fn((type: string, data: unknown, dims: number[]) => ({
+    type,
+    data,
+    dims,
+  })),
   env: {},
+}));
+
+// ImageTensorModule mock (native module for image-to-tensor conversion)
+jest.mock('./src/services/onnxInferenceService/nativeImageTensor', () => ({
+  ImageTensorModule: {
+    imageToTensor: jest.fn(() => Promise.resolve(new Array(3 * 640 * 640).fill(0))),
+    cropImage: jest.fn(
+      (_uri: string, _x: number, _y: number, _w: number, _h: number, outputPath: string) =>
+        Promise.resolve(outputPath),
+    ),
+  },
 }));
 
 // react-native-fs mock

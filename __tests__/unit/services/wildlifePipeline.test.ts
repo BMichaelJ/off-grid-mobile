@@ -6,8 +6,9 @@ import type { DetectorConfig } from '../../../src/types';
 
 jest.mock('react-native-fs', () => ({
   DocumentDirectoryPath: '/mock/documents',
+  CachesDirectoryPath: '/mock/caches',
   exists: jest.fn().mockResolvedValue(true),
-  mkdir: jest.fn(),
+  mkdir: jest.fn().mockResolvedValue(undefined),
   copyFile: jest.fn(),
 }));
 

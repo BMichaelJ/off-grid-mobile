@@ -13,6 +13,11 @@ export interface ProcessPhotoParams {
   photoUri: string;
   speciesConfigs: SpeciesConfig[];
   miewidModelPath: string;
+  embeddingInputSize?: [number, number];
+  embeddingNormalize?: {
+    mean: [number, number, number];
+    std: [number, number, number];
+  };
 }
 
 export interface PipelineResult {

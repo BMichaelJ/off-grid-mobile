@@ -755,3 +755,144 @@ final class AppDelegateBackgroundSessionTests: XCTestCase {
     )
   }
 }
+
+// MARK: - ImageTensorModule Tests
+
+final class ImageTensorModuleTests: XCTestCase {
+
+  private var module: ImageTensorModule!
+
+  override func setUp() {
+    super.setUp()
+    module = ImageTensorModule()
+  }
+
+  func testRequiresMainQueueSetupReturnsFalse() {
+    XCTAssertFalse(ImageTensorModule.requiresMainQueueSetup())
+  }
+
+  // -- extractNchw tests --
+
+  func testExtractNchwOutputSize() {
+    let image = createTestImage(width: 2, height: 2, color: .red)
+    guard let cgImage = image.cgImage else {
+      XCTFail("Could not get CGImage")
+      return
+    }
+    let output = ImageTensorModule.extractNchw(
+      from: cgImage, width: 2, height: 2,
+      mean: [0, 0, 0], std: [1, 1, 1], scale: 1.0, bgr: false
+    )
+    XCTAssertNotNil(output)
+    XCTAssertEqual(output!.count, 3 * 2 * 2)
+  }
+
+  func testExtractNchwRedPixelIdentityNorm() {
+    let image = createTestImage(width: 1, height: 1, color: .red)
+    guard let cgImage = image.cgImage else {
+      XCTFail("Could not get CGImage")
+      return
+    }
+    let output = ImageTensorModule.extractNchw(
+      from: cgImage, width: 1, height: 1,
+      mean: [0, 0, 0], std: [1, 1, 1], scale: 1.0, bgr: false
+    )!
+    // R=255, G=0, B=0
+    XCTAssertEqual(output[0], 255.0, accuracy: 1.0) // R
+    XCTAssertEqual(output[1], 0.0, accuracy: 1.0)   // G
+    XCTAssertEqual(output[2], 0.0, accuracy: 1.0)   // B
+  }
+
+  func testExtractNchwBgrSwapsChannels() {
+    let image = createTestImage(width: 1, height: 1, color: .red)
+    guard let cgImage = image.cgImage else {
+      XCTFail("Could not get CGImage")
+      return
+    }
+    let output = ImageTensorModule.extractNchw(
+      from: cgImage, width: 1, height: 1,
+      mean: [0, 0, 0], std: [1, 1, 1], scale: 1.0, bgr: true
+    )!
+    // BGR: channel 0=B, channel 1=G, channel 2=R
+    XCTAssertEqual(output[0], 0.0, accuracy: 1.0)   // B
+    XCTAssertEqual(output[1], 0.0, accuracy: 1.0)   // G
+    XCTAssertEqual(output[2], 255.0, accuracy: 1.0) // R
+  }
+
+  func testExtractNchwWithScale() {
+    let image = createTestImage(width: 1, height: 1, color: .white)
+    guard let cgImage = image.cgImage else {
+      XCTFail("Could not get CGImage")
+      return
+    }
+    let output = ImageTensorModule.extractNchw(
+      from: cgImage, width: 1, height: 1,
+      mean: [0, 0, 0], std: [1, 1, 1], scale: 255.0, bgr: false
+    )!
+    // 255/255 = 1.0
+    XCTAssertEqual(output[0], 1.0, accuracy: 0.01)
+    XCTAssertEqual(output[1], 1.0, accuracy: 0.01)
+    XCTAssertEqual(output[2], 1.0, accuracy: 0.01)
+  }
+
+  // -- cropImage tests --
+
+  func testCropImageCreatesFile() {
+    let image = createTestImage(width: 100, height: 100, color: .blue)
+    let tempDir = NSTemporaryDirectory()
+    let inputPath = tempDir + "test_input_\(UUID().uuidString).png"
+    let outputPath = tempDir + "test_crop_\(UUID().uuidString).jpg"
+
+    try! image.pngData()!.write(to: URL(fileURLWithPath: inputPath))
+
+    let exp = expectation(description: "crop")
+    module.cropImage(
+      inputPath,
+      x: 0.25, y: 0.25, width: 0.5, height: 0.5,
+      outputPath: outputPath,
+      resolver: { result in
+        XCTAssertEqual(result as? String, outputPath)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: outputPath))
+        exp.fulfill()
+      },
+      rejecter: { _, msg, _ in
+        XCTFail("cropImage should not reject: \(msg ?? "")")
+        exp.fulfill()
+      }
+    )
+    waitForExpectations(timeout: 5)
+
+    try? FileManager.default.removeItem(atPath: inputPath)
+    try? FileManager.default.removeItem(atPath: outputPath)
+  }
+
+  func testImageToTensorRejectsInvalidUri() {
+    let exp = expectation(description: "reject")
+    module.imageToTensor(
+      "/nonexistent/path.jpg",
+      width: 10, height: 10,
+      mean: [0, 0, 0], std: [1, 1, 1],
+      scale: 1.0, channelOrder: "RGB",
+      resolver: { _ in
+        XCTFail("Should reject invalid URI")
+        exp.fulfill()
+      },
+      rejecter: { code, _, _ in
+        XCTAssertEqual(code, "IMAGE_ERROR")
+        exp.fulfill()
+      }
+    )
+    waitForExpectations(timeout: 5)
+  }
+
+  // -- Helpers --
+
+  private func createTestImage(width: Int, height: Int, color: UIColor) -> UIImage {
+    let size = CGSize(width: width, height: height)
+    let renderer = UIGraphicsImageRenderer(size: size)
+    return renderer.image { ctx in
+      color.setFill()
+      ctx.fill(CGRect(origin: .zero, size: size))
+    }
+  }
+}

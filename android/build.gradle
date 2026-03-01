@@ -19,3 +19,18 @@ buildscript {
 }
 
 apply plugin: "com.facebook.react.rootproject"
+
+// Pin onnxruntime-android to a specific version so that the
+// "latest.integration" dynamic selector in the library's build.gradle
+// does not need to fetch Maven metadata (works around SAX parser issues
+// on some JVM versions).
+allprojects {
+    configurations.all {
+        resolutionStrategy.eachDependency { details ->
+            if (details.requested.group == 'com.microsoft.onnxruntime' &&
+                    details.requested.version == 'latest.integration') {
+                details.useVersion '1.24.2'
+            }
+        }
+    }
+}

@@ -15,6 +15,8 @@
 		04B9D6432F38EC7700F1A435 /* DownloadManagerModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 04B9D6402F38EC7700F1A435 /* DownloadManagerModule.m */; };
 		0A7B3D032F3A0B1200CC5FA1 /* PDFExtractorModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 0A7B3D012F3A0B1200CC5FA1 /* PDFExtractorModule.m */; };
 		0A7B3D042F3A0B1200CC5FA1 /* PDFExtractorModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7B3D022F3A0B1200CC5FA1 /* PDFExtractorModule.swift */; };
+		0B1A2E012F93A00100AABB01 /* ImageTensorModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 0B1A2DFF2F93A00100AABB01 /* ImageTensorModule.m */; };
+		0B1A2E022F93A00100AABB01 /* ImageTensorModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B1A2E002F93A00100AABB01 /* ImageTensorModule.swift */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		553E18B7CCC207C0885499E4 /* libPods-OffgridMobileTests.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D1B1541769AADA563D6CC44E /* libPods-OffgridMobileTests.a */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
@@ -42,6 +44,8 @@
 		04B9D6412F38EC7700F1A435 /* DownloadManagerModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadManagerModule.swift; sourceTree = "<group>"; };
 		0A7B3D012F3A0B1200CC5FA1 /* PDFExtractorModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = PDFExtractorModule.m; sourceTree = "<group>"; };
 		0A7B3D022F3A0B1200CC5FA1 /* PDFExtractorModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFExtractorModule.swift; sourceTree = "<group>"; };
+		0B1A2DFF2F93A00100AABB01 /* ImageTensorModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ImageTensorModule.m; sourceTree = "<group>"; };
+		0B1A2E002F93A00100AABB01 /* ImageTensorModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageTensorModule.swift; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* OffgridMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OffgridMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = OffgridMobile/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = OffgridMobile/Info.plist; sourceTree = "<group>"; };
@@ -86,6 +90,8 @@
 				049521632F390D4500AA4EB4 /* CoreMLDiffusionModule.m */,
 				049521642F390D4500AA4EB4 /* CoreMLDiffusionModule.swift */,
 				04B9D6402F38EC7700F1A435 /* DownloadManagerModule.m */,
+				0B1A2DFF2F93A00100AABB01 /* ImageTensorModule.m */,
+				0B1A2E002F93A00100AABB01 /* ImageTensorModule.swift */,
 				0A7B3D012F3A0B1200CC5FA1 /* PDFExtractorModule.m */,
 				0A7B3D022F3A0B1200CC5FA1 /* PDFExtractorModule.swift */,
 				04B9D6412F38EC7700F1A435 /* DownloadManagerModule.swift */,
@@ -367,6 +373,8 @@
 				04B9D6432F38EC7700F1A435 /* DownloadManagerModule.m in Sources */,
 				049521652F390D4500AA4EB4 /* CoreMLDiffusionModule.m in Sources */,
 				049521662F390D4500AA4EB4 /* CoreMLDiffusionModule.swift in Sources */,
+				0B1A2E012F93A00100AABB01 /* ImageTensorModule.m in Sources */,
+				0B1A2E022F93A00100AABB01 /* ImageTensorModule.swift in Sources */,
 				0A7B3D032F3A0B1200CC5FA1 /* PDFExtractorModule.m in Sources */,
 				0A7B3D042F3A0B1200CC5FA1 /* PDFExtractorModule.swift in Sources */,
 				761780ED2CA45674006654EE /* AppDelegate.swift in Sources */,
