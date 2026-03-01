@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { wildlifePipeline } from '../../services/wildlifePipeline';
+import { buildEmbeddingDatabase } from '../../services/embeddingDatabaseBuilder';
 import { useWildlifeStore } from '../../stores/wildlifeStore';
 import type { SpeciesConfig } from '../../services/wildlifePipeline/types';
 import type { RootStackParamList } from '../../navigation/types';
@@ -52,14 +53,21 @@ export function useCaptureFlow() {
 
       setIsProcessing(true);
       try {
-        // Build species configs from loaded packs
-        const speciesConfigs: SpeciesConfig[] = packs.map((pack) => ({
-          packId: pack.id,
-          species: pack.species,
-          detectorModelPath: pack.detectorModelFile,
-          detectorConfig: {} as SpeciesConfig['detectorConfig'],
-          embeddingDatabase: [],
-        }));
+        // Build species configs from loaded packs with merged embedding databases
+        const { localIndividuals } = useWildlifeStore.getState();
+        const speciesConfigs: SpeciesConfig[] = await Promise.all(
+          packs.map(async (pack) => ({
+            packId: pack.id,
+            species: pack.species,
+            detectorModelPath: pack.detectorModelFile,
+            detectorConfig: {} as SpeciesConfig['detectorConfig'],
+            embeddingDatabase: await buildEmbeddingDatabase(
+              pack.species,
+              packs,
+              localIndividuals,
+            ),
+          })),
+        );
 
         const gps = await getDeviceLocation();
         const deviceInfo = getDeviceInfo();

@@ -4,3 +4,7 @@
 declare const crypto: {
   getRandomValues<T extends ArrayBufferView>(array: T): T;
 };
+
+// Hermes exposes atob / btoa for base64 encoding / decoding.
+declare function atob(encoded: string): string;
+declare function btoa(decoded: string): string;
