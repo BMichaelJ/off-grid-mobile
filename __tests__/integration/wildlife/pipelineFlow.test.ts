@@ -99,7 +99,7 @@ function buildParams(
 ): ProcessPhotoParams {
   return {
     photoUri: PHOTO_URI,
-    gps: { lat: -1.2921, lon: 36.8219, accuracy: 10 },
+
     speciesConfigs: [
       {
         packId: 'pack-zebra-01',
@@ -118,7 +118,7 @@ function buildParamsForResighting(
 ): ProcessPhotoParams {
   return {
     photoUri: PHOTO_URI_2,
-    gps: { lat: -1.293, lon: 36.822, accuracy: 8 },
+
     speciesConfigs: [
       {
         packId: 'pack-zebra-01',
@@ -200,7 +200,7 @@ describe('Wildlife Pipeline — Full Integration Flow', () => {
     const observation: Observation = {
       id: result.observationId,
       photoUri: PHOTO_URI,
-      gps: { lat: -1.2921, lon: 36.8219, accuracy: 10 },
+      gps: null,
       timestamp: new Date().toISOString(),
       deviceInfo: { model: 'Test Device', os: 'Android 13' },
       fieldNotes: null,
@@ -304,7 +304,7 @@ describe('Wildlife Pipeline — Full Integration Flow', () => {
     const observation2: Observation = {
       id: resightResult.observationId,
       photoUri: PHOTO_URI_2,
-      gps: { lat: -1.293, lon: 36.822, accuracy: 8 },
+      gps: null,
       timestamp: new Date().toISOString(),
       deviceInfo: { model: 'Test Device', os: 'Android 13' },
       fieldNotes: null,

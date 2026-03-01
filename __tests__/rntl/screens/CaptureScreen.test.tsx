@@ -57,6 +57,18 @@ jest.mock('../../../src/services/wildlifePipeline', () => ({
   },
 }));
 
+// Mock packManager (used by loadDetectorConfig in useCaptureFlow)
+jest.mock('../../../src/services/packManager', () => ({
+  packManager: {
+    loadManifest: jest.fn().mockRejectedValue(new Error('no manifest')),
+  },
+}));
+
+// Mock embeddingDatabaseBuilder (used by useCaptureFlow)
+jest.mock('../../../src/services/embeddingDatabaseBuilder', () => ({
+  buildEmbeddingDatabase: jest.fn().mockResolvedValue([]),
+}));
+
 // Spy on Alert.alert
 jest.spyOn(Alert, 'alert');
 
@@ -203,7 +215,7 @@ describe('CaptureScreen', () => {
     });
   });
 
-  it('passes GPS as null (stub) to pipeline and observation', async () => {
+  it('saves GPS as null (stub) in observation', async () => {
     const { getByTestId } = render(<CaptureScreen />);
     fireEvent.press(getByTestId('take-photo-button'));
 
@@ -211,12 +223,7 @@ describe('CaptureScreen', () => {
       expect(mockNavigate).toHaveBeenCalled();
     });
 
-    // GPS passed to pipeline
-    expect(mockProcessPhoto).toHaveBeenCalledWith(
-      expect.objectContaining({ gps: null }),
-    );
-
-    // GPS saved in observation
+    // GPS saved in observation (pipeline no longer receives GPS)
     const observations = useWildlifeStore.getState().observations;
     expect(observations[0].gps).toBeNull();
   });

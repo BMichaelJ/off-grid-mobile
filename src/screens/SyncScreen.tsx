@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { Card } from '../components';
 import { useThemedStyles } from '../theme/useThemedStyles';
+import { useTheme } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 import { useWildlifeStore } from '../stores/wildlifeStore';
@@ -15,22 +16,22 @@ import type { SyncQueueItem, SyncStatus } from '../types/wildlife';
 
 interface StatusConfig {
   label: string;
-  color: string;
+  colorKey: 'statusWarning' | 'statusSuccess' | 'statusError';
   icon: string;
 }
 
 function getStatusConfig(status: SyncStatus): StatusConfig {
   switch (status) {
     case 'pending':
-      return { label: 'Pending', color: '#EAB308', icon: 'clock' };
+      return { label: 'Pending', colorKey: 'statusWarning', icon: 'clock' };
     case 'uploading':
-      return { label: 'Uploading', color: '#EAB308', icon: 'upload-cloud' };
+      return { label: 'Uploading', colorKey: 'statusWarning', icon: 'upload-cloud' };
     case 'synced':
-      return { label: 'Synced', color: '#22C55E', icon: 'check-circle' };
+      return { label: 'Synced', colorKey: 'statusSuccess', icon: 'check-circle' };
     case 'failed':
-      return { label: 'Failed', color: '#EF4444', icon: 'alert-circle' };
+      return { label: 'Failed', colorKey: 'statusError', icon: 'alert-circle' };
     case 'failedPermanent':
-      return { label: 'Failed', color: '#EF4444', icon: 'x-circle' };
+      return { label: 'Failed', colorKey: 'statusError', icon: 'x-circle' };
   }
 }
 
@@ -47,6 +48,7 @@ function truncateId(id: string, maxLength = 12): string {
 
 export const SyncScreen: React.FC = () => {
   const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const syncQueue = useWildlifeStore((s) => s.syncQueue);
   const updateSyncStatus = useWildlifeStore((s) => s.updateSyncStatus);
 
@@ -67,6 +69,7 @@ export const SyncScreen: React.FC = () => {
   const renderItem = useCallback(
     ({ item, index }: { item: SyncQueueItem; index: number }) => {
       const config = getStatusConfig(item.status);
+      const statusColor = colors[config.colorKey];
       const isFailed = item.status === 'failed' || item.status === 'failedPermanent';
 
       return (
@@ -78,7 +81,7 @@ export const SyncScreen: React.FC = () => {
               </Text>
               <View style={styles.statusRow}>
                 <View
-                  style={[styles.statusBadge, { backgroundColor: config.color }]}
+                  style={[styles.statusBadge, { backgroundColor: statusColor }]}
                   testID={`sync-status-${item.status}`}
                 />
                 <Text style={styles.statusText}>{config.label}</Text>
@@ -90,7 +93,7 @@ export const SyncScreen: React.FC = () => {
               )}
             </View>
             <View style={styles.itemActions}>
-              <Icon name={config.icon} size={18} color={config.color} />
+              <Icon name={config.icon} size={18} color={statusColor} />
               {isFailed && (
                 <TouchableOpacity
                   style={styles.retryButton}

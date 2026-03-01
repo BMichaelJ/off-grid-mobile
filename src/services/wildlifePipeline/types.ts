@@ -11,7 +11,6 @@ export interface SpeciesConfig {
 
 export interface ProcessPhotoParams {
   photoUri: string;
-  gps: { lat: number; lon: number; accuracy: number } | null;
   speciesConfigs: SpeciesConfig[];
   miewidModelPath: string;
 }

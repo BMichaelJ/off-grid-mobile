@@ -44,6 +44,11 @@ export const COLORS_LIGHT = {
   errorBackground: 'rgba(220, 38, 38, 0.10)',
   info: '#525252',
 
+  // Status indicator colors (for badges, bounding boxes, sync states)
+  statusSuccess: '#22C55E',
+  statusWarning: '#EAB308',
+  statusError: '#EF4444',
+
   // Special
   overlay: 'rgba(0, 0, 0, 0.4)',
   divider: '#EBEBEB',
@@ -79,6 +84,11 @@ export const COLORS_DARK = {
   error: '#C75050',
   errorBackground: 'rgba(239, 68, 68, 0.15)',
   info: '#B0B0B0',
+
+  // Status indicator colors (for badges, bounding boxes, sync states)
+  statusSuccess: '#4ADE80',
+  statusWarning: '#FACC15',
+  statusError: '#F87171',
 
   // Special
   overlay: 'rgba(0, 0, 0, 0.7)',

@@ -6,8 +6,49 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { wildlifePipeline } from '../../services/wildlifePipeline';
 import { buildEmbeddingDatabase } from '../../services/embeddingDatabaseBuilder';
 import { useWildlifeStore } from '../../stores/wildlifeStore';
+import { packManager } from '../../services/packManager';
 import type { SpeciesConfig } from '../../services/wildlifePipeline/types';
+import type { DetectorConfig } from '../../types';
 import type { RootStackParamList } from '../../navigation/types';
+
+/**
+ * Load the detector config JSON from the pack directory.
+ * Falls back to a safe default if loading fails.
+ *
+ * TODO(P0): Once packs include real detector_config.json files,
+ * remove the fallback and require the config to exist.
+ */
+async function loadDetectorConfig(packDir: string): Promise<DetectorConfig> {
+  try {
+    const manifest = await packManager.loadManifest(`${packDir}/manifest.json`);
+    const configPath = `${packDir}/${manifest.detectorModel.configFile}`;
+    const RNFS = require('react-native-fs');
+    const content = await RNFS.readFile(configPath, 'utf8');
+    return JSON.parse(content);
+  } catch {
+    // Fallback until packs ship real detector configs
+    return DEFAULT_DETECTOR_CONFIG;
+  }
+}
+
+const DEFAULT_DETECTOR_CONFIG: DetectorConfig = {
+  modelFile: '',
+  architecture: 'yolov5',
+  inputSize: [640, 640],
+  inputChannels: 3,
+  channelOrder: 'RGB',
+  normalize: { mean: [0, 0, 0], std: [1, 1, 1], scale: 255 },
+  confidenceThreshold: 0.25,
+  nmsThreshold: 0.45,
+  maxDetections: 100,
+  outputFormat: 'yolov5',
+  classLabels: ['animal'],
+  outputSpec: {
+    boxFormat: 'cxcywh',
+    coordinateType: 'normalized',
+    layout: '[1, num_detections, 5+num_classes]',
+  },
+};
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -60,7 +101,7 @@ export function useCaptureFlow() {
             packId: pack.id,
             species: pack.species,
             detectorModelPath: pack.detectorModelFile,
-            detectorConfig: {} as SpeciesConfig['detectorConfig'],
+            detectorConfig: await loadDetectorConfig(pack.packDir),
             embeddingDatabase: await buildEmbeddingDatabase(
               pack.species,
               packs,
@@ -74,7 +115,6 @@ export function useCaptureFlow() {
 
         const result = await wildlifePipeline.processPhoto({
           photoUri,
-          gps,
           speciesConfigs,
           miewidModelPath,
         });

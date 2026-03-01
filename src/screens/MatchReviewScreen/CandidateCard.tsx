@@ -1,7 +1,9 @@
 import React from 'react';
 import { View, Text, Image, TouchableOpacity } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
+import { useTheme } from '../../theme';
 import type { MatchCandidate } from '../../types';
+import type { createStyles } from './styles';
 
 interface CandidateCardProps {
   candidate: MatchCandidate;
@@ -9,7 +11,7 @@ interface CandidateCardProps {
   displayId: string;
   refPhotoUri: string | null;
   onApprove: (individualId: string) => void;
-  styles: Record<string, any>;
+  styles: ReturnType<typeof createStyles>;
 }
 
 export const CandidateCard: React.FC<CandidateCardProps> = ({
@@ -20,6 +22,7 @@ export const CandidateCard: React.FC<CandidateCardProps> = ({
   onApprove,
   styles,
 }) => {
+  const { colors } = useTheme();
   const scorePercent = `${Math.round(candidate.score * 100)}%`;
 
   return (
@@ -32,7 +35,7 @@ export const CandidateCard: React.FC<CandidateCardProps> = ({
         />
       ) : (
         <View style={styles.candidatePhotoPlaceholder}>
-          <Icon name="image" size={24} color="#8A8A8A" />
+          <Icon name="image" size={24} color={colors.textMuted} />
         </View>
       )}
 

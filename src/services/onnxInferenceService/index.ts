@@ -15,6 +15,13 @@ class OnnxInferenceService {
     logger.log(`[OnnxInference] Loaded ${type} model: ${modelPath}`);
   }
 
+  // TODO(P0): Wire real ONNX inference. These stubs return empty results.
+  // Implementation requires:
+  // 1. Image-to-tensor conversion (pixel extraction from URI → Float32Array)
+  //    using react-native-image-manipulator or a custom native module
+  // 2. Running the ONNX session with the tensor input
+  // 3. Parsing output tensors via postprocessing.ts (already implemented)
+  // Until this is wired, the pipeline will always return zero detections.
   async runDetection(
     _imageUri: string,
     _detectorModelPath: string,
@@ -23,6 +30,8 @@ class OnnxInferenceService {
     return { results: [], inferenceTimeMs: 0 };
   }
 
+  // TODO(P0): Wire real embedding extraction. Returns empty embedding.
+  // Same image-to-tensor requirement as runDetection above.
   async extractEmbedding(
     _croppedImageUri: string,
     _miewidModelPath: string,

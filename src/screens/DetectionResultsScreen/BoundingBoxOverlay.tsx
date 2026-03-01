@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import type { Detection } from '../../types/wildlife';
-import { useThemedStyles } from '../../theme';
+import { useThemedStyles, useTheme } from '../../theme';
 import { createStyles } from './styles';
 
 interface BoundingBoxOverlayProps {
@@ -9,22 +9,19 @@ interface BoundingBoxOverlayProps {
   onPress: () => void;
 }
 
-const getBoxColor = (confidence: number): string => {
-  if (confidence > 0.8) {
-    return '#22C55E';
-  }
-  if (confidence > 0.5) {
-    return '#EAB308';
-  }
-  return '#EF4444';
-};
-
 export const BoundingBoxOverlay: React.FC<BoundingBoxOverlayProps> = ({
   detection,
   onPress,
 }) => {
   const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const { boundingBox, species, speciesConfidence, id } = detection;
+
+  const getBoxColor = (confidence: number): string => {
+    if (confidence > 0.8) return colors.statusSuccess;
+    if (confidence > 0.5) return colors.statusWarning;
+    return colors.statusError;
+  };
   const borderColor = getBoxColor(speciesConfidence);
 
   return (
