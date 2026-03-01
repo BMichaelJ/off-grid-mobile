@@ -38,6 +38,9 @@ export const MatchReviewScreen: React.FC = () => {
   const localIndividuals = useWildlifeStore((s) => s.localIndividuals);
   const updateDetection = useWildlifeStore((s) => s.updateDetection);
   const addLocalIndividual = useWildlifeStore((s) => s.addLocalIndividual);
+  const addEmbeddingToLocalIndividual = useWildlifeStore(
+    (s) => s.addEmbeddingToLocalIndividual,
+  );
 
   const detection = useMemo(
     () => observation?.detections.find((d) => d.id === detectionId) ?? null,
@@ -78,6 +81,17 @@ export const MatchReviewScreen: React.FC = () => {
 
   const handleApprove = useCallback(
     (individualId: string) => {
+      const approvedCandidate = candidates.find(
+        (c) => c.individualId === individualId,
+      );
+      if (approvedCandidate?.source === 'local' && detection) {
+        addEmbeddingToLocalIndividual(
+          individualId,
+          detection.embedding,
+          detection.croppedImageUri,
+        );
+      }
+
       updateDetection(observationId, detectionId, {
         matchResult: {
           topCandidates: candidates,
@@ -87,7 +101,15 @@ export const MatchReviewScreen: React.FC = () => {
       });
       navigation.goBack();
     },
-    [navigation, updateDetection, observationId, detectionId, candidates],
+    [
+      navigation,
+      updateDetection,
+      addEmbeddingToLocalIndividual,
+      observationId,
+      detectionId,
+      candidates,
+      detection,
+    ],
   );
 
   const handleNoMatch = useCallback(() => {

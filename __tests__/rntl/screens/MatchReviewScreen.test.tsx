@@ -8,6 +8,8 @@
  * - Shows approve buttons on each candidate
  * - Shows "No Match" and "Skip" buttons
  * - Approve updates store and navigates back
+ * - Approve for local individual accumulates embedding
+ * - Approve for pack individual does not accumulate embedding
  * - No Match creates a new LocalIndividual and approves it
  * - No Match includes firstSeen timestamp
  * - No Match uses field ID from getNextFieldId
@@ -111,6 +113,7 @@ const makeObservation = (
 // ---------------------------------------------------------------------------
 const mockUpdateDetection = jest.fn();
 const mockAddLocalIndividual = jest.fn();
+const mockAddEmbeddingToLocalIndividual = jest.fn();
 const mockGetNextFieldId = jest.fn(() => 'FIELD-001');
 let mockObservations = [makeObservation()];
 const mockLocalIndividuals = [
@@ -132,6 +135,7 @@ const mockGetState = () => ({
   localIndividuals: mockLocalIndividuals,
   updateDetection: mockUpdateDetection,
   addLocalIndividual: mockAddLocalIndividual,
+  addEmbeddingToLocalIndividual: mockAddEmbeddingToLocalIndividual,
   getNextFieldId: mockGetNextFieldId,
 });
 
@@ -232,6 +236,40 @@ describe('MatchReviewScreen', () => {
     const { getByTestId } = render(<MatchReviewScreen />);
     fireEvent.press(getByTestId('approve-ind-1'));
 
+    expect(mockUpdateDetection).toHaveBeenCalledWith('obs-1', 'det-1', {
+      matchResult: expect.objectContaining({
+        approvedIndividual: 'ind-1',
+        reviewStatus: 'approved',
+      }),
+    });
+    expect(mockGoBack).toHaveBeenCalled();
+  });
+
+  it('approve for local individual accumulates embedding', () => {
+    const { getByTestId } = render(<MatchReviewScreen />);
+    // ind-2 is the local candidate in our test data
+    fireEvent.press(getByTestId('approve-ind-2'));
+
+    expect(mockAddEmbeddingToLocalIndividual).toHaveBeenCalledWith(
+      'ind-2',
+      [0.1, 0.2, 0.3],
+      'file:///crops/det-1.jpg',
+    );
+    expect(mockUpdateDetection).toHaveBeenCalledWith('obs-1', 'det-1', {
+      matchResult: expect.objectContaining({
+        approvedIndividual: 'ind-2',
+        reviewStatus: 'approved',
+      }),
+    });
+    expect(mockGoBack).toHaveBeenCalled();
+  });
+
+  it('approve for pack individual does not accumulate embedding', () => {
+    const { getByTestId } = render(<MatchReviewScreen />);
+    // ind-1 is the pack candidate in our test data
+    fireEvent.press(getByTestId('approve-ind-1'));
+
+    expect(mockAddEmbeddingToLocalIndividual).not.toHaveBeenCalled();
     expect(mockUpdateDetection).toHaveBeenCalledWith('obs-1', 'det-1', {
       matchResult: expect.objectContaining({
         approvedIndividual: 'ind-1',
