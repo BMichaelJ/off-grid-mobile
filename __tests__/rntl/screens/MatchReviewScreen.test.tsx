@@ -8,7 +8,9 @@
  * - Shows approve buttons on each candidate
  * - Shows "No Match" and "Skip" buttons
  * - Approve updates store and navigates back
- * - No Match updates store and navigates back
+ * - No Match creates a new LocalIndividual and approves it
+ * - No Match includes firstSeen timestamp
+ * - No Match uses field ID from getNextFieldId
  * - Skip navigates back without updating store
  */
 
@@ -71,7 +73,7 @@ const makeDetection = (overrides: Record<string, any> = {}) => ({
   species: 'zebra_plains',
   speciesConfidence: 0.95,
   croppedImageUri: 'file:///crops/det-1.jpg',
-  embedding: [],
+  embedding: [0.1, 0.2, 0.3],
   matchResult: {
     topCandidates: [
       makeCandidate({ individualId: 'ind-1', score: 0.92, source: 'pack' }),
@@ -108,6 +110,8 @@ const makeObservation = (
 // Wildlife store mock
 // ---------------------------------------------------------------------------
 const mockUpdateDetection = jest.fn();
+const mockAddLocalIndividual = jest.fn();
+const mockGetNextFieldId = jest.fn(() => 'FIELD-001');
 let mockObservations = [makeObservation()];
 const mockLocalIndividuals = [
   {
@@ -123,16 +127,22 @@ const mockLocalIndividuals = [
   },
 ];
 
-jest.mock('../../../src/stores/wildlifeStore', () => ({
-  useWildlifeStore: jest.fn((selector?: any) => {
-    const state = {
-      observations: mockObservations,
-      localIndividuals: mockLocalIndividuals,
-      updateDetection: mockUpdateDetection,
-    };
+const mockGetState = () => ({
+  observations: mockObservations,
+  localIndividuals: mockLocalIndividuals,
+  updateDetection: mockUpdateDetection,
+  addLocalIndividual: mockAddLocalIndividual,
+  getNextFieldId: mockGetNextFieldId,
+});
+
+jest.mock('../../../src/stores/wildlifeStore', () => {
+  const hook = (selector?: any) => {
+    const state = mockGetState();
     return selector ? selector(state) : state;
-  }),
-}));
+  };
+  hook.getState = () => mockGetState();
+  return { useWildlifeStore: hook };
+});
 
 // ---------------------------------------------------------------------------
 // Import component under test
@@ -231,17 +241,69 @@ describe('MatchReviewScreen', () => {
     expect(mockGoBack).toHaveBeenCalled();
   });
 
-  it('No Match updates store with rejected status and navigates back', () => {
+  it('No Match creates a new local individual and approves it', () => {
     const { getByTestId } = render(<MatchReviewScreen />);
     fireEvent.press(getByTestId('no-match-button'));
 
+    // Should have called getNextFieldId to generate an ID
+    expect(mockGetNextFieldId).toHaveBeenCalled();
+
+    // Should create a new local individual with the detection's data
+    expect(mockAddLocalIndividual).toHaveBeenCalledWith(
+      expect.objectContaining({
+        localId: 'FIELD-001',
+        userLabel: null,
+        species: 'zebra_plains',
+        embeddings: [[0.1, 0.2, 0.3]],
+        referencePhotos: ['file:///crops/det-1.jpg'],
+        encounterCount: 1,
+        syncStatus: 'pending',
+        wildbookId: null,
+      }),
+    );
+
+    // Should update detection with new individual ID and approved status
     expect(mockUpdateDetection).toHaveBeenCalledWith('obs-1', 'det-1', {
       matchResult: expect.objectContaining({
-        approvedIndividual: null,
-        reviewStatus: 'rejected',
+        approvedIndividual: 'FIELD-001',
+        reviewStatus: 'approved',
       }),
     });
     expect(mockGoBack).toHaveBeenCalled();
+  });
+
+  it('No Match includes firstSeen timestamp in new individual', () => {
+    const fixedDate = '2026-02-28T12:00:00.000Z';
+    jest.spyOn(Date.prototype, 'toISOString').mockReturnValue(fixedDate);
+
+    const { getByTestId } = render(<MatchReviewScreen />);
+    fireEvent.press(getByTestId('no-match-button'));
+
+    expect(mockAddLocalIndividual).toHaveBeenCalledWith(
+      expect.objectContaining({
+        firstSeen: fixedDate,
+      }),
+    );
+
+    jest.restoreAllMocks();
+  });
+
+  it('No Match uses field ID from getNextFieldId in detection update', () => {
+    mockGetNextFieldId.mockReturnValueOnce('FIELD-042');
+
+    const { getByTestId } = render(<MatchReviewScreen />);
+    fireEvent.press(getByTestId('no-match-button'));
+
+    expect(mockAddLocalIndividual).toHaveBeenCalledWith(
+      expect.objectContaining({
+        localId: 'FIELD-042',
+      }),
+    );
+    expect(mockUpdateDetection).toHaveBeenCalledWith('obs-1', 'det-1', {
+      matchResult: expect.objectContaining({
+        approvedIndividual: 'FIELD-042',
+      }),
+    });
   });
 
   it('Skip navigates back without updating store', () => {
@@ -249,6 +311,7 @@ describe('MatchReviewScreen', () => {
     fireEvent.press(getByTestId('skip-button'));
 
     expect(mockUpdateDetection).not.toHaveBeenCalled();
+    expect(mockAddLocalIndividual).not.toHaveBeenCalled();
     expect(mockGoBack).toHaveBeenCalled();
   });
 

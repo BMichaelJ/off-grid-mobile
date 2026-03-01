@@ -37,6 +37,7 @@ export const MatchReviewScreen: React.FC = () => {
   );
   const localIndividuals = useWildlifeStore((s) => s.localIndividuals);
   const updateDetection = useWildlifeStore((s) => s.updateDetection);
+  const addLocalIndividual = useWildlifeStore((s) => s.addLocalIndividual);
 
   const detection = useMemo(
     () => observation?.detections.find((d) => d.id === detectionId) ?? null,
@@ -90,15 +91,40 @@ export const MatchReviewScreen: React.FC = () => {
   );
 
   const handleNoMatch = useCallback(() => {
+    if (!detection) return;
+
+    // Create a new local individual from this detection
+    const newId = useWildlifeStore.getState().getNextFieldId();
+    addLocalIndividual({
+      localId: newId,
+      userLabel: null,
+      species: detection.species,
+      embeddings: [detection.embedding],
+      referencePhotos: [detection.croppedImageUri],
+      firstSeen: new Date().toISOString(),
+      encounterCount: 1,
+      syncStatus: 'pending',
+      wildbookId: null,
+    });
+
+    // Update detection to reference the new individual
     updateDetection(observationId, detectionId, {
       matchResult: {
         topCandidates: candidates,
-        approvedIndividual: null,
-        reviewStatus: 'rejected',
+        approvedIndividual: newId,
+        reviewStatus: 'approved',
       },
     });
     navigation.goBack();
-  }, [navigation, updateDetection, observationId, detectionId, candidates]);
+  }, [
+    navigation,
+    detection,
+    addLocalIndividual,
+    updateDetection,
+    observationId,
+    detectionId,
+    candidates,
+  ]);
 
   const handleSkip = useCallback(() => {
     navigation.goBack();
