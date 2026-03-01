@@ -11,14 +11,42 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { AppNavigator } from './src/navigation';
 import { useTheme } from './src/theme';
-import { hardwareService, modelManager, authService } from './src/services';
+import { hardwareService, modelManager, authService, packManager } from './src/services';
 import logger from './src/utils/logger';
-import { useAppStore, useAuthStore } from './src/stores';
+import { useAppStore, useAuthStore, useWildlifeStore } from './src/stores';
 import { LockScreen } from './src/screens';
 import { useAppState } from './src/hooks/useAppState';
 import { LogBox } from 'react-native';
 
 LogBox.ignoreAllLogs(); // Suppress all logs
+
+const ensureAppStoreHydrated = async () => {
+  const storeWithPersist = useAppStore as typeof useAppStore & {
+    persist?: {
+      hasHydrated?: () => boolean;
+      rehydrate?: () => Promise<void>;
+    };
+  };
+  const persistApi = storeWithPersist.persist;
+  if (!persistApi?.hasHydrated || !persistApi.rehydrate) return;
+  if (!persistApi.hasHydrated()) {
+    await persistApi.rehydrate();
+  }
+};
+
+const ensureWildlifeStoreHydrated = async () => {
+  const storeWithPersist = useWildlifeStore as typeof useWildlifeStore & {
+    persist?: {
+      hasHydrated?: () => boolean;
+      rehydrate?: () => Promise<void>;
+    };
+  };
+  const persistApi = storeWithPersist.persist;
+  if (!persistApi?.hasHydrated || !persistApi.rehydrate) return;
+  if (!persistApi.hasHydrated()) {
+    await persistApi.rehydrate();
+  }
+};
 
 function App() {
   const [isInitializing, setIsInitializing] = useState(true);
@@ -56,24 +84,21 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const ensureAppStoreHydrated = async () => {
-    const storeWithPersist = useAppStore as typeof useAppStore & {
-      persist?: {
-        hasHydrated?: () => boolean;
-        rehydrate?: () => Promise<void>;
-      };
-    };
-    const persistApi = storeWithPersist.persist;
-    if (!persistApi?.hasHydrated || !persistApi.rehydrate) return;
-    if (!persistApi.hasHydrated()) {
-      await persistApi.rehydrate();
-    }
-  };
-
   const initializeApp = async () => {
     try {
       // Ensure persisted download metadata is loaded before restore logic reads it.
       await ensureAppStoreHydrated();
+
+      // Ensure wildlife store (packs, observations, etc.) is hydrated.
+      await ensureWildlifeStoreHydrated();
+
+      // Initialize pack manager (creates packs directory if needed)
+      try {
+        await packManager.initialize();
+        logger.log('[App] Pack manager initialized');
+      } catch (err) {
+        logger.error('[App] Failed to initialize pack manager:', err);
+      }
 
       // Phase 1: Quick initialization - get app ready to show UI
       // Initialize hardware detection
