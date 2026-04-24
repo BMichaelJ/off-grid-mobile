@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - main
+      - wildlife-reid
   pull_request:
     branches:
       - main
+      - wildlife-reid
 
 jobs:
   lint:
