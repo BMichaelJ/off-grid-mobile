@@ -819,7 +819,8 @@ final class ImageTensorModuleTests: XCTestCase {
     XCTAssertEqual(output[2], 255.0, accuracy: 1.0) // R
   }
 
-  func testExtractNchwWithScale() {
+  func testExtractNchwWithScaleMultiplier() {
+    // Per EMBEDDING_PACK_FORMAT.md, `scale` is a multiplier (e.g. 1/255) applied before mean/std.
     let image = createTestImage(width: 1, height: 1, color: .white)
     guard let cgImage = image.cgImage else {
       XCTFail("Could not get CGImage")
@@ -827,12 +828,35 @@ final class ImageTensorModuleTests: XCTestCase {
     }
     let output = ImageTensorModule.extractNchw(
       from: cgImage, width: 1, height: 1,
-      mean: [0, 0, 0], std: [1, 1, 1], scale: 255.0, bgr: false
+      mean: [0, 0, 0], std: [1, 1, 1], scale: 1.0 / 255.0, bgr: false
     )!
-    // 255/255 = 1.0
+    // 255 * 1/255 = 1.0
     XCTAssertEqual(output[0], 1.0, accuracy: 0.01)
     XCTAssertEqual(output[1], 1.0, accuracy: 0.01)
     XCTAssertEqual(output[2], 1.0, accuracy: 0.01)
+  }
+
+  func testExtractNchwMiewIDParityFixtureSolidRed() {
+    // Golden parity fixture — must match the Kotlin and Python references for a 1×1 pure-red
+    // pixel through MiewID's preprocessing path (ImageNet mean/std, scale = 1/255).
+    //   R: (255/255 - 0.485) / 0.229 ≈ 2.2489...
+    //   G: (0       - 0.456) / 0.224 ≈ -2.0357...
+    //   B: (0       - 0.406) / 0.225 ≈ -1.8044...
+    let image = createTestImage(width: 1, height: 1, color: .red)
+    guard let cgImage = image.cgImage else {
+      XCTFail("Could not get CGImage")
+      return
+    }
+    let output = ImageTensorModule.extractNchw(
+      from: cgImage, width: 1, height: 1,
+      mean: [0.485, 0.456, 0.406],
+      std: [0.229, 0.224, 0.225],
+      scale: 1.0 / 255.0,
+      bgr: false
+    )!
+    XCTAssertEqual(output[0], 2.2489083, accuracy: 1e-3)
+    XCTAssertEqual(output[1], -2.0357143, accuracy: 1e-3)
+    XCTAssertEqual(output[2], -1.8044444, accuracy: 1e-3)
   }
 
   // -- cropImage tests --

@@ -26,8 +26,13 @@ if [ -n "$STAGED_SWIFT" ]; then
     echo "⚠️  SwiftLint not installed — skipping Swift lint. Install: brew install swiftlint"
   fi
 
-  echo "▶ iOS tests..."
-  npm run test:ios
+  if command -v xcodebuild >/dev/null 2>&1; then
+    echo "▶ iOS tests..."
+    npm run test:ios
+  else
+    echo "⚠️  xcodebuild not available (non-macOS host) — skipping iOS tests."
+    echo "   These will run on the macOS CI runner before merge."
+  fi
 fi
 
 # ── Kotlin / Android ───────────────────────────────────────────────────────────

@@ -65,7 +65,7 @@ export async function preprocessImageForEmbedding(
     height,
     norm.mean,
     norm.std,
-    1.0, // Embedding models expect pixel values in [0, 255] divided by 1.0
+    1.0 / 255.0, // MiewID (and ImageNet norm in general) expects inputs in [0,1] before mean/std
     'RGB',
   );
 

@@ -56,7 +56,8 @@ class ImageTensorModuleTest {
     }
 
     @Test
-    fun `bitmapToNchw with scale 255 normalizes to 0-1 range`() {
+    fun `bitmapToNchw with scale 1 over 255 normalizes to 0-1 range`() {
+        // Per EMBEDDING_PACK_FORMAT.md, scale is a MULTIPLIER (e.g. 1/255) applied before mean/std.
         val bmp = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
         bmp.setPixel(0, 0, Color.rgb(255, 128, 0))
 
@@ -64,16 +65,16 @@ class ImageTensorModuleTest {
             bmp, 1, 1,
             doubleArrayOf(0.0, 0.0, 0.0),
             doubleArrayOf(1.0, 1.0, 1.0),
-            255.0, false,
+            1.0 / 255.0, false,
         )
-        assertEquals(1.0, output[0], 0.01)          // R: 255/255
-        assertEquals(128.0 / 255.0, output[1], 0.01) // G: 128/255
-        assertEquals(0.0, output[2], 0.01)            // B: 0/255
+        assertEquals(1.0, output[0], 0.01)          // R: 255 * 1/255
+        assertEquals(128.0 / 255.0, output[1], 0.01) // G: 128 * 1/255
+        assertEquals(0.0, output[2], 0.01)            // B: 0 * 1/255
         bmp.recycle()
     }
 
     @Test
-    fun `bitmapToNchw with ImageNet normalization`() {
+    fun `bitmapToNchw with ImageNet normalization applies scale as multiplier`() {
         val bmp = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
         bmp.setPixel(0, 0, Color.rgb(128, 128, 128))
 
@@ -81,11 +82,34 @@ class ImageTensorModuleTest {
         val std = doubleArrayOf(0.229, 0.224, 0.225)
 
         val output = ImageTensorModule.bitmapToNchw(
-            bmp, 1, 1, mean, std, 255.0, false,
+            bmp, 1, 1, mean, std, 1.0 / 255.0, false,
         )
-        // (128/255 - 0.485) / 0.229 ≈ 0.0682
-        val expected = (128.0 / 255.0 - 0.485) / 0.229
+        // Formula: (pixel * scale - mean) / std → (128 * 1/255 - 0.485) / 0.229 ≈ 0.0682
+        val expected = (128.0 * (1.0 / 255.0) - 0.485) / 0.229
         assertEquals(expected, output[0], 0.001)
+        bmp.recycle()
+    }
+
+    @Test
+    fun `bitmapToNchw MiewID parity fixture — solid red 255 with ImageNet norm`() {
+        // Golden parity fixture: this is the NumPy-computed expected output for a 1×1 pure-red
+        // pixel passed through MiewID's preprocessing path (ImageNet mean/std, scale = 1/255).
+        //   R: (255/255 - 0.485) / 0.229 = (1 - 0.485) / 0.229 ≈ 2.2489...
+        //   G: (0   - 0.456) / 0.224 ≈ -2.0357...
+        //   B: (0   - 0.406) / 0.225 ≈ -1.8044...
+        // If any of these drift, MiewID embeddings will be garbage. Fail loudly.
+        val bmp = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+        bmp.setPixel(0, 0, Color.RED)
+
+        val output = ImageTensorModule.bitmapToNchw(
+            bmp, 1, 1,
+            doubleArrayOf(0.485, 0.456, 0.406),
+            doubleArrayOf(0.229, 0.224, 0.225),
+            1.0 / 255.0, false,
+        )
+        assertEquals(2.2489083, output[0], 1e-4)
+        assertEquals(-2.0357143, output[1], 1e-4)
+        assertEquals(-1.8044444, output[2], 1e-4)
         bmp.recycle()
     }
 

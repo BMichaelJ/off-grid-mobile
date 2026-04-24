@@ -219,7 +219,7 @@ describe('preprocessImageForDetection', () => {
 });
 
 describe('preprocessImageForEmbedding', () => {
-  it('should call ImageTensorModule with default MiewID params', async () => {
+  it('should call ImageTensorModule with default MiewID params (scale = 1/255 for ImageNet)', async () => {
     const { ImageTensorModule } = require('../../../src/services/onnxInferenceService/nativeImageTensor');
     const mockData = [0.5, 0.6, 0.7];
     (ImageTensorModule.imageToTensor as jest.Mock).mockResolvedValueOnce(mockData);
@@ -231,13 +231,13 @@ describe('preprocessImageForEmbedding', () => {
       440, 440,
       [0.485, 0.456, 0.406],
       [0.229, 0.224, 0.225],
-      1.0,
+      1.0 / 255.0,
       'RGB',
     );
     expect(result).toBeInstanceOf(Float32Array);
   });
 
-  it('should accept custom inputSize and normalize params', async () => {
+  it('should accept custom inputSize and normalize params (scale still 1/255)', async () => {
     const { ImageTensorModule } = require('../../../src/services/onnxInferenceService/nativeImageTensor');
     (ImageTensorModule.imageToTensor as jest.Mock).mockResolvedValueOnce([]);
 
@@ -252,7 +252,7 @@ describe('preprocessImageForEmbedding', () => {
       224, 224,
       [0.5, 0.5, 0.5],
       [0.5, 0.5, 0.5],
-      1.0,
+      1.0 / 255.0,
       'RGB',
     );
   });

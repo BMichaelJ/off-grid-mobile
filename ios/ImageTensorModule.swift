@@ -185,9 +185,11 @@ class ImageTensorModule: NSObject {
         let b = Double(pixelData[pixelOffset + 2])
 
         let i = row * w + col
-        output[rIdx * h * w + i] = (r / scale - mean[0]) / std[0]
-        output[gIdx * h * w + i] = (g / scale - mean[1]) / std[1]
-        output[bIdx * h * w + i] = (b / scale - mean[2]) / std[2]
+        // `scale` is a multiplier per docs/EMBEDDING_PACK_FORMAT.md (e.g. 1/255 to move
+        // uint8 [0,255] into float [0,1] before mean/std normalization).
+        output[rIdx * h * w + i] = (r * scale - mean[0]) / std[0]
+        output[gIdx * h * w + i] = (g * scale - mean[1]) / std[1]
+        output[bIdx * h * w + i] = (b * scale - mean[2]) / std[2]
       }
     }
 
