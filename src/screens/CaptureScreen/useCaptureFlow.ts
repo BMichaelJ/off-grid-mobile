@@ -37,7 +37,7 @@ const DEFAULT_DETECTOR_CONFIG: DetectorConfig = {
   inputSize: [640, 640],
   inputChannels: 3,
   channelOrder: 'RGB',
-  normalize: { mean: [0, 0, 0], std: [1, 1, 1], scale: 255 },
+  normalize: { mean: [0, 0, 0], std: [1, 1, 1], scale: 1 / 255 },
   confidenceThreshold: 0.25,
   nmsThreshold: 0.45,
   maxDetections: 100,

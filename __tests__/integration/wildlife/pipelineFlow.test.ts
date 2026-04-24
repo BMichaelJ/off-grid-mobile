@@ -74,7 +74,7 @@ const DETECTOR_CONFIG = {
   normalize: {
     mean: [0, 0, 0] as [number, number, number],
     std: [1, 1, 1] as [number, number, number],
-    scale: 255,
+    scale: 1 / 255,
   },
   confidenceThreshold: 0.5,
   nmsThreshold: 0.45,
