@@ -23,26 +23,65 @@ When asked to push code, follow this full workflow:
 0. ensure that you are on a branch that is specific to this change i.e feat/new-feature or fix/bug-fix or docs/update-readme or chore/update-dependencies, or test/new-test, etc
 1. Push the branch to the remote (`git push -u origin <branch>`)
 2. Create a PR using `gh pr create`. Ensure that you are adhering to the PR template. **Do NOT include "Generated with Claude Code" or any AI attribution in PR descriptions.**
-3. Wait for Gemini to review the PR (poll with `gh pr checks` and `gh api repos/{owner}/{repo}/pulls/{number}/reviews` until a review appears)
-4. Once a review exists, pull down the review comments: `gh api repos/{owner}/{repo}/pulls/{number}/comments` and `gh api repos/{owner}/{repo}/pulls/{number}/reviews`
-5. Address every review comment — fix the code, re-run the quality gates (tests, lint, tsc). Resolve the comment appropriately and post that on the PR directly.
-6. Push the fixes
-7. Report what was changed in response to the review
+3. Wait for GitHub Actions CI to start. Poll with `gh pr checks {number}` (or `gh pr checks` from the PR's branch) until all four jobs (`typecheck`, `test`, `lint`, `android-build`) report a status. If any fail, fix and re-push before reading reviewer comments.
+4. Once CI is green, wait for Gemini to post (`gh api repos/{owner}/{repo}/pulls/{number}/comments` + `.../reviews`).
+5. Address every Gemini review comment — fix the code, or reply on the thread explaining why it's fine. Resolve the conversation either way.
+6. Push the fixes; pre-commit gates re-run. Comment `/gemini review` to re-trigger Gemini.
+7. Loop until CI is green and Gemini has nothing blocking.
+8. Report what was changed in response to the review.
 
 ## CI Review Loop
 
-The repo has three automated reviewers on every PR. After pushing, loop until all are green:
+After pushing, loop until everything below is green or addressed.
 
-| Reviewer | What it checks | How to address |
-|---|---|---|
-| **Gemini Bot** | Code quality, style, logic issues | Read comments via `gh api`, fix code or reply explaining why it's fine, then comment `/gemini review` to trigger a fresh pass |
-| **Codecov** | Test coverage thresholds | Add missing tests, ensure new code is covered. Check the Codecov report for uncovered lines |
-| **SonarCloud** | Security hotspots, code smells, duplications, bugs | Fix flagged issues — especially security hotspots and duplications. Resolve quality gate failures before merging |
+### GitHub Actions CI (merge-blocking)
+
+The `CI` workflow runs four jobs on every push and PR targeting `main` or `wildlife-reid`:
+
+| Job | What it checks |
+|---|---|
+| `typecheck` | `tsc --noEmit` |
+| `test` | Jest unit + integration tests with coverage |
+| `lint` | ESLint + `gradlew :app:lintDebug` + SwiftLint |
+| `android-build` | Full debug Gradle build |
+
+If any job fails, fix locally and push. Per-job mirror commands:
+
+| CI job | Local equivalent |
+|---|---|
+| `typecheck` | `npx tsc --noEmit` |
+| `test` | `npx jest --coverage --forceExit` (just the JS suite — `npm test` also chains Android + iOS, which is slower and platform-locked) |
+| `lint` | `npm run lint` (ESLint + Android lint + SwiftLint) |
+| `android-build` | `cd android && ./gradlew :app:assembleDebug` (heavy; usually fine to let CI catch it) |
+
+### Gemini Code Assist (advisory)
+
+Auto-reviews every PR on open and on `/gemini review`. Posts a summary comment plus line-level review comments tagged by severity.
 
 **Workflow:**
-1. Push code → wait for all three reviewers to report
-2. Pull down Gemini comments, Codecov report, and SonarCloud findings
-3. Fix issues: code changes for Gemini/SonarCloud, add tests for Codecov
-4. Re-run local quality gates (`npm run lint && npm test && npx tsc --noEmit`)
-5. Push fixes, comment `/gemini review` on the PR to re-trigger Gemini
-6. Repeat until all three reviewers pass with no blocking issues
+1. Push → wait for the Gemini summary + comments to land (~1-2 min after PR open or `/gemini review`).
+2. Pull down comments: `gh api repos/{owner}/{repo}/pulls/{number}/comments` and `.../reviews`.
+3. Address every comment — fix the code, or reply on the comment thread explaining why it's a non-issue. Resolve the conversation.
+4. Re-run pre-commit gates locally, push fixes.
+5. Comment `/gemini review` on the PR to trigger a fresh pass.
+6. Repeat until Gemini's findings are addressed.
+
+Gemini findings are advisory — they don't block merge themselves, but unaddressed legitimate findings should block merge in human review.
+
+### Codex 5.5 (on-demand second opinion)
+
+Use for scoped deep reviews when warranted (foundational PRs, risky refactors, pre-merge sanity passes). Not part of the routine PR loop.
+
+```bash
+codex exec -s read-only --skip-git-repo-check "<scoped review prompt>"
+```
+
+File substantive findings to `kb/wildlife-reid-mobile/outputs/reports/`.
+
+### Human review (final gate)
+
+Final approval required before merging into `wildlife-reid` or `main`.
+
+### Not currently installed
+
+Codecov and SonarCloud are referenced in some upstream docs but are **not** wired up on this fork. If reinstated later, document them here. CodeQL (free, one-click at `Settings → Code security`) is a reasonable alternative if SAST is desired.
