@@ -23,7 +23,7 @@ When asked to push code, follow this full workflow:
 0. ensure that you are on a branch that is specific to this change i.e feat/new-feature or fix/bug-fix or docs/update-readme or chore/update-dependencies, or test/new-test, etc
 1. Push the branch to the remote (`git push -u origin <branch>`)
 2. Create a PR using `gh pr create`. Ensure that you are adhering to the PR template. **Do NOT include "Generated with Claude Code" or any AI attribution in PR descriptions.**
-3. Wait for GitHub Actions CI to start. Poll with `gh pr checks <pr>` until all four jobs (`typecheck`, `test`, `lint`, `android-build`) report a status. If any fail, fix and re-push before reading reviewer comments.
+3. Wait for GitHub Actions CI to start. Poll with `gh pr checks {number}` (or `gh pr checks` from the PR's branch) until all four jobs (`typecheck`, `test`, `lint`, `android-build`) report a status. If any fail, fix and re-push before reading reviewer comments.
 4. Once CI is green, wait for Gemini to post (`gh api repos/{owner}/{repo}/pulls/{number}/comments` + `.../reviews`).
 5. Address every Gemini review comment — fix the code, or reply on the thread explaining why it's fine. Resolve the conversation either way.
 6. Push the fixes; pre-commit gates re-run. Comment `/gemini review` to re-trigger Gemini.
@@ -45,7 +45,14 @@ The `CI` workflow runs four jobs on every push and PR targeting `main` or `wildl
 | `lint` | ESLint + `gradlew :app:lintDebug` + SwiftLint |
 | `android-build` | Full debug Gradle build |
 
-If any job fails, fix locally (re-run `npx tsc --noEmit && npm test && npm run lint` to mirror CI), push, and wait for the next run.
+If any job fails, fix locally and push. Per-job mirror commands:
+
+| CI job | Local equivalent |
+|---|---|
+| `typecheck` | `npx tsc --noEmit` |
+| `test` | `npx jest --coverage --forceExit` (just the JS suite — `npm test` also chains Android + iOS, which is slower and platform-locked) |
+| `lint` | `npm run lint` (ESLint + Android lint + SwiftLint) |
+| `android-build` | `cd android && ./gradlew :app:assembleDebug` (heavy; usually fine to let CI catch it) |
 
 ### Gemini Code Assist (advisory)
 
