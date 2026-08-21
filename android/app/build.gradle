@@ -159,4 +159,11 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("com.microsoft.onnxruntime:onnxruntime-android:1.24.2")
+    // org.tensorflow:tensorflow-lite was Maven-relocated to LiteRT; the
+    // org.tensorflow.lite.* Interpreter API is unchanged (drop-in rename).
+    // Pinned to the 1.4.x line (not the latest 2.2.0) — litert-gpu has no
+    // 2.x release yet, and litert-api 2.2.0's Kotlin metadata (2.3.0) is
+    // newer than this project's pinned Kotlin compiler (2.1.20, android/build.gradle).
+    androidTestImplementation("com.google.ai.edge.litert:litert:1.4.2")
+    androidTestImplementation("com.google.ai.edge.litert:litert-gpu:1.4.2")
 }
