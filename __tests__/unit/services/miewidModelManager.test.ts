@@ -1,7 +1,9 @@
 import {
   reconcileMiewidModel,
   checkEmbeddingModelCompatibility,
+  acquireMiewidModel,
 } from '../../../src/services/miewidModelManager';
+import { useWildlifeStore } from '../../../src/stores/wildlifeStore';
 import type { MiewIDModelRecord } from '../../../src/types';
 
 jest.mock('react-native-fs', () => ({
@@ -10,7 +12,16 @@ jest.mock('react-native-fs', () => ({
   hash: jest.fn(),
 }));
 
+jest.mock('../../../src/services/modelDownloadService', () => ({
+  modelDownloadService: {
+    downloadModel: jest.fn(),
+  },
+}));
+
 import RNFS from 'react-native-fs';
+import { modelDownloadService } from '../../../src/services/modelDownloadService';
+
+const mockDownloadModel = modelDownloadService.downloadModel as jest.Mock;
 
 const mockExists = RNFS.exists as jest.Mock;
 const mockStat = RNFS.stat as jest.Mock;
@@ -145,6 +156,90 @@ describe('reconcileMiewidModel', () => {
     const result = await reconcileMiewidModel(makeRecord());
 
     expect(result?.status).toBe('corrupt');
+  });
+});
+
+describe('acquireMiewidModel', () => {
+  const SOURCE = {
+    name: 'miewid',
+    version: '4.1.0',
+    url: 'https://example.org/miewid.onnx',
+    expectedSha256: 'abc123',
+    expectedSizeBytes: 1000,
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    useWildlifeStore.getState().reset();
+  });
+
+  it('transitions the store record through downloading to ready on success', async () => {
+    const statuses: string[] = [];
+    const unsubscribe = useWildlifeStore.subscribe((state) => {
+      if (state.miewidModel) {
+        statuses.push(state.miewidModel.status);
+      }
+    });
+    mockDownloadModel.mockResolvedValue({
+      ok: true,
+      path: '/mock/documents/models/miewid-4.1.0.onnx',
+      sha256: 'abc123',
+      sizeBytes: 1000,
+    });
+
+    const record = await acquireMiewidModel(SOURCE);
+    unsubscribe();
+
+    expect(statuses).toContain('downloading');
+    expect(record.status).toBe('ready');
+    expect(record.path).toBe('/mock/documents/models/miewid-4.1.0.onnx');
+    expect(record.sha256).toBe('abc123');
+    expect(record.sizeBytes).toBe(1000);
+    expect(record.version).toBe('4.1.0');
+    expect(record.verifiedAt).not.toBeNull();
+    expect(useWildlifeStore.getState().miewidModel).toEqual(record);
+  });
+
+  it('marks the record corrupt on checksum failure', async () => {
+    mockDownloadModel.mockResolvedValue({
+      ok: false,
+      code: 'checksum-mismatch',
+      message: 'hash differs',
+    });
+
+    const record = await acquireMiewidModel(SOURCE);
+
+    expect(record.status).toBe('corrupt');
+    expect(useWildlifeStore.getState().miewidModel?.status).toBe('corrupt');
+  });
+
+  it('marks the record missing on cancellation or network failure', async () => {
+    mockDownloadModel.mockResolvedValue({
+      ok: false,
+      code: 'cancelled',
+      message: 'download cancelled',
+    });
+
+    const record = await acquireMiewidModel(SOURCE);
+
+    expect(record.status).toBe('missing');
+    expect(useWildlifeStore.getState().miewidModel?.status).toBe('missing');
+  });
+
+  it('forwards download options to the download service', async () => {
+    mockDownloadModel.mockResolvedValue({
+      ok: false,
+      code: 'network-error',
+      message: 'offline',
+    });
+    const onProgress = jest.fn();
+
+    await acquireMiewidModel(SOURCE, { onProgress });
+
+    expect(mockDownloadModel).toHaveBeenCalledWith(
+      SOURCE,
+      expect.objectContaining({ onProgress }),
+    );
   });
 });
 
