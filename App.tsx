@@ -113,6 +113,24 @@ function App() {
         logger.error('[App] Failed to reconcile MiewID model:', err);
       }
 
+      // Re-validate persisted packs against their on-disk files; packs that
+      // fail integrity checks are quarantined rather than silently matched.
+      try {
+        const { packs, setPacks } = useWildlifeStore.getState();
+        if (packs.length > 0) {
+          const reconciled = await packManager.reconcilePacks(packs);
+          setPacks(reconciled);
+          const quarantined = reconciled.filter(
+            (p) => p.status === 'quarantined',
+          ).length;
+          logger.log(
+            `[App] Packs reconciled: ${reconciled.length} total, ${quarantined} quarantined`,
+          );
+        }
+      } catch (err) {
+        logger.error('[App] Failed to reconcile packs:', err);
+      }
+
       // Initialize hardware detection
       const deviceInfo = await hardwareService.getDeviceInfo();
       setDeviceInfo(deviceInfo);

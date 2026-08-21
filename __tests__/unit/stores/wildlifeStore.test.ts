@@ -157,6 +157,19 @@ describe('wildlifeStore', () => {
 
       expect(useWildlifeStore.getState().packs).toHaveLength(1);
     });
+
+    it('setPacks replaces the entire pack list in one update', () => {
+      useWildlifeStore.getState().addPack(makePack({ id: 'stale' }));
+
+      useWildlifeStore.getState().setPacks([
+        makePack({ id: 'pack-a', status: 'ready' }),
+        makePack({ id: 'pack-b', status: 'quarantined' }),
+      ]);
+
+      const { packs } = useWildlifeStore.getState();
+      expect(packs.map((p) => p.id)).toEqual(['pack-a', 'pack-b']);
+      expect(packs[1].status).toBe('quarantined');
+    });
   });
 
   // ========================================================================

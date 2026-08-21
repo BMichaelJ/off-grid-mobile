@@ -300,6 +300,25 @@ describe('CaptureScreen', () => {
     expect(wildlifePipeline.processPhoto).not.toHaveBeenCalled();
   });
 
+  it('excludes quarantined packs from capture', async () => {
+    useWildlifeStore.setState({
+      packs: [
+        makeTestPack({ id: 'pack-healthy', status: 'ready' }),
+        makeTestPack({ id: 'pack-broken', status: 'quarantined' }),
+      ],
+    });
+
+    const { getByTestId } = render(<CaptureScreen />);
+    fireEvent.press(getByTestId('take-photo-button'));
+
+    await waitFor(() => {
+      expect(wildlifePipeline.processPhoto).toHaveBeenCalled();
+    });
+    const call = (wildlifePipeline.processPhoto as jest.Mock).mock.calls[0][0];
+    expect(call.speciesConfigs).toHaveLength(1);
+    expect(call.speciesConfigs[0].packId).toBe('pack-healthy');
+  });
+
   it('excludes packs with an incompatible embedding model version', async () => {
     useWildlifeStore.setState({
       packs: [

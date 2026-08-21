@@ -27,6 +27,7 @@ interface WildlifeState {
   // Pack actions
   addPack: (pack: EmbeddingPack) => void;
   removePack: (packId: string) => void;
+  setPacks: (packs: EmbeddingPack[]) => void;
 
   // Observation actions
   addObservation: (observation: Observation) => void;
@@ -97,6 +98,8 @@ export const useWildlifeStore = create<WildlifeState>()(
         set((state) => ({
           packs: state.packs.filter((p) => p.id !== packId),
         })),
+
+      setPacks: (packs) => set({ packs }),
 
       // ---- Observation actions --------------------------------------------
       addObservation: (observation) =>
