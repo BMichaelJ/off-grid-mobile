@@ -3,7 +3,7 @@
  *
  * Tests for the wildlife home dashboard including:
  * - Screen renders with correct testID
- * - "Wildlife ID" title display
+ * - "EleBook" title display
  * - Quick capture button rendering and navigation
  * - Active packs summary with count and total individuals
  * - Empty packs state message
@@ -142,9 +142,9 @@ describe('WildlifeHomeScreen', () => {
       expect(getByTestId('wildlife-home-screen')).toBeTruthy();
     });
 
-    it('shows "Wildlife ID" title', () => {
+    it('shows "EleBook" title', () => {
       const { getByText } = render(<WildlifeHomeScreen />);
-      expect(getByText('Wildlife ID')).toBeTruthy();
+      expect(getByText('EleBook')).toBeTruthy();
     });
   });
 

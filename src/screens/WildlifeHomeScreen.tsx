@@ -86,7 +86,7 @@ export const WildlifeHomeScreen: React.FC = () => {
       edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Wildlife ID</Text>
+        <Text style={styles.title}>EleBook</Text>
       </View>
 
       <ScrollView

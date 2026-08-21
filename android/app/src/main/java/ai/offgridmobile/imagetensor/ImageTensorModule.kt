@@ -19,6 +19,45 @@ class ImageTensorModule(reactContext: ReactApplicationContext) :
         const val NAME = "ImageTensorModule"
 
         /**
+         * Resize toward (targetWidth, targetHeight) via repeated 2x downscales
+         * before the final step, instead of one large single-shot bilinear
+         * resize.
+         *
+         * `Bitmap.createScaledBitmap`'s bilinear filter is only accurate for
+         * moderate size reductions. For a large reduction in one step (e.g. a
+         * multi-megapixel photo down to 440x440 — 10x or more per axis), it
+         * aliases: high-frequency detail gets folded into different values
+         * instead of being averaged away, unlike PIL/torchvision's `Resize`
+         * (used by the Python reference pipeline), which applies antialiasing
+         * before subsampling. Repeated halving approximates that antialiasing
+         * with a box/mipmap-style filter chain, so each individual step never
+         * exceeds a 2x reduction. Verified against Project Ganesha's golden
+         * on-device parity test (E13-4).
+         */
+        private fun progressiveResize(source: Bitmap, targetWidth: Int, targetHeight: Int): Bitmap {
+            if (source.width == targetWidth && source.height == targetHeight) {
+                return source
+            }
+
+            var current = source
+            while (current.width > targetWidth * 2 && current.height > targetHeight * 2) {
+                val nextWidth = maxOf(targetWidth, current.width / 2)
+                val nextHeight = maxOf(targetHeight, current.height / 2)
+                val next = Bitmap.createScaledBitmap(current, nextWidth, nextHeight, true)
+                if (current !== source) {
+                    current.recycle()
+                }
+                current = next
+            }
+
+            val result = Bitmap.createScaledBitmap(current, targetWidth, targetHeight, true)
+            if (current !== source) {
+                current.recycle()
+            }
+            return result
+        }
+
+        /**
          * Convert a bitmap to a normalized NCHW Float32 tensor.
          * Exposed for unit testing.
          */
@@ -31,11 +70,7 @@ class ImageTensorModule(reactContext: ReactApplicationContext) :
             scale: Double,
             bgr: Boolean,
         ): DoubleArray {
-            val resized = if (bitmap.width == targetWidth && bitmap.height == targetHeight) {
-                bitmap
-            } else {
-                Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true)
-            }
+            val resized = progressiveResize(bitmap, targetWidth, targetHeight)
 
             val w = resized.width
             val h = resized.height
