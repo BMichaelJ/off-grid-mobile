@@ -65,6 +65,7 @@
 |---|---|---|
 | 2026-04-22 | "What's built, what's stubbed, and how to ship MiewID v4.1 on-device?" | [integration plan](outputs/plans/miewid-v41-integration-plan.md) + [state of implementation](wiki/meta/state-of-implementation.md) + [critical bugs](wiki/bugs/critical-bugs.md) |
 | 2026-04-23 | "Fix the preprocessing scale bugs (Stage 0 of integration plan)" | PR [#11](https://github.com/WildMeOrg/off-grid-mobile/pull/11) — `fix/preprocessing-scale-math` → `wildlife-reid`. Native multiply-not-divide on both platforms + MiewID TS wrapper `1/255` + cross-platform golden parity fixture. 410/410 Jest, 11/11 Kotlin tests pass. |
+| 2026-08-20/21 | "Resume: pull latest, upgrade the branch, re-evaluate with Codex, continue toward deployable" | [Codex re-eval](outputs/reports/2026-08-20-codex-reeval.md) + PRs #17, #18, #22–#27 merged (Stage 2.1–2.7 complete; see plan addendum). Housekeeping: 10 dependabot bumps → main → wildlife-reid (#20), stale PR #2 closed, upstream (2,929 commits) intentionally skipped. Gemini Code Assist unresponsive since ~Aug — Codex is the working second-opinion path. |
 
 ## Key Conclusions (TL;DR)
 
