@@ -17,6 +17,9 @@ jest.mock('onnxruntime-react-native', () => ({
   })),
 }));
 
+const flushPromises = () =>
+  new Promise<void>((resolve) => setImmediate(() => resolve()));
+
 const makeDetectorConfig = (
   overrides: Partial<DetectorConfig> = {},
 ): DetectorConfig => ({
@@ -159,6 +162,81 @@ describe('OnnxInferenceService', () => {
       await expect(
         onnxInferenceService.unloadModel('/nonexistent.onnx'),
       ).resolves.not.toThrow();
+    });
+
+    it('should wait for in-flight inference before releasing the session', async () => {
+      const { InferenceSession } = require('onnxruntime-react-native');
+      let resolveRun: (value: unknown) => void = () => {};
+      const mockSession = {
+        release: jest.fn(),
+        inputNames: ['images'],
+        outputNames: ['output0'],
+        run: jest.fn(
+          () =>
+            new Promise((resolve) => {
+              resolveRun = resolve;
+            }),
+        ),
+      };
+      InferenceSession.create.mockResolvedValue(mockSession);
+      await onnxInferenceService.loadModel('/models/det.onnx', 'detector');
+
+      const detection = onnxInferenceService.runDetection(
+        'file:///photo.jpg',
+        '/models/det.onnx',
+        makeDetectorConfig(),
+      );
+      await flushPromises(); // let runDetection reach session.run
+
+      const unload = onnxInferenceService.unloadModel('/models/det.onnx');
+      await flushPromises();
+      // Inference still in flight — the session must not be released yet
+      expect(mockSession.release).not.toHaveBeenCalled();
+
+      resolveRun({ output0: { data: new Float32Array(0) } });
+      await detection;
+      await unload;
+
+      expect(mockSession.release).toHaveBeenCalledTimes(1);
+      expect(onnxInferenceService.isModelLoaded('/models/det.onnx')).toBe(false);
+    });
+
+    it('should reject operations that start while an unload is pending', async () => {
+      const { InferenceSession } = require('onnxruntime-react-native');
+      let resolveRun: (value: unknown) => void = () => {};
+      const mockSession = {
+        release: jest.fn(),
+        inputNames: ['images'],
+        outputNames: ['output0'],
+        run: jest.fn(
+          () =>
+            new Promise((resolve) => {
+              resolveRun = resolve;
+            }),
+        ),
+      };
+      InferenceSession.create.mockResolvedValue(mockSession);
+      await onnxInferenceService.loadModel('/models/det.onnx', 'detector');
+
+      const detection = onnxInferenceService.runDetection(
+        'file:///photo.jpg',
+        '/models/det.onnx',
+        makeDetectorConfig(),
+      );
+      await flushPromises();
+      const unload = onnxInferenceService.unloadModel('/models/det.onnx');
+
+      await expect(
+        onnxInferenceService.runDetection(
+          'file:///photo2.jpg',
+          '/models/det.onnx',
+          makeDetectorConfig(),
+        ),
+      ).rejects.toThrow('Detector model not loaded');
+
+      resolveRun({ output0: { data: new Float32Array(0) } });
+      await detection;
+      await unload;
     });
   });
 
