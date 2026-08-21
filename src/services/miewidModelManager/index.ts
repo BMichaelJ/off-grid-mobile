@@ -1,5 +1,9 @@
 import RNFS from 'react-native-fs';
 import type { MiewIDModelRecord } from '../../types';
+import type { ModelSource } from '../../config/modelSources';
+import { modelDownloadService } from '../modelDownloadService';
+import type { DownloadOptions } from '../modelDownloadService';
+import { useWildlifeStore } from '../../stores/wildlifeStore';
 import logger from '../../utils/logger';
 
 export type EmbeddingModelCompatibility =
@@ -41,6 +45,54 @@ export function checkEmbeddingModelCompatibility(
     return 'incompatible';
   }
   return model[1] === pack[1] ? 'compatible' : 'minor-mismatch';
+}
+
+/**
+ * Download, verify, and register the MiewID model. The store record tracks
+ * progress: 'downloading' while in flight, then 'ready' (verified),
+ * 'corrupt' (integrity failure), or 'missing' (cancelled / unreachable).
+ * This is the production writer of the model record — Settings and
+ * first-run flows call this.
+ */
+export async function acquireMiewidModel(
+  source: ModelSource,
+  opts: DownloadOptions = {},
+): Promise<MiewIDModelRecord> {
+  const { setMiewidModel } = useWildlifeStore.getState();
+
+  const downloading: MiewIDModelRecord = {
+    path: '',
+    name: source.name,
+    version: source.version,
+    sha256: source.expectedSha256 || null,
+    sizeBytes: source.expectedSizeBytes ?? null,
+    status: 'downloading',
+    verifiedAt: null,
+  };
+  setMiewidModel(downloading);
+
+  const outcome = await modelDownloadService.downloadModel(source, opts);
+
+  let record: MiewIDModelRecord;
+  if (outcome.ok) {
+    record = {
+      ...downloading,
+      path: outcome.path,
+      sha256: outcome.sha256,
+      sizeBytes: outcome.sizeBytes,
+      status: 'ready',
+      verifiedAt: new Date().toISOString(),
+    };
+  } else if (outcome.code === 'checksum-mismatch') {
+    record = { ...downloading, status: 'corrupt' };
+    logger.error(`[MiewIDModelManager] Downloaded model failed verification: ${outcome.message}`);
+  } else {
+    record = { ...downloading, status: 'missing' };
+    logger.warn(`[MiewIDModelManager] Model acquisition failed (${outcome.code}): ${outcome.message}`);
+  }
+
+  setMiewidModel(record);
+  return record;
 }
 
 /**
