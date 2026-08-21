@@ -121,22 +121,64 @@ interface OriginalImageSize {
 }
 
 /**
+ * Clamp a normalized box to the unit square by clamping its corners.
+ *
+ * Corners are clamped independently and width/height reconstructed, so a box
+ * overhanging an edge keeps only its visible extent (clamping x and width
+ * independently would instead widen the clipped box).
+ *
+ * Returns null for boxes with non-finite coordinates or no positive visible
+ * area — callers must drop those detections.
+ */
+function clampBoxToUnitSquare(box: BoundingBox): BoundingBox | null {
+  if (
+    !Number.isFinite(box.x) ||
+    !Number.isFinite(box.y) ||
+    !Number.isFinite(box.width) ||
+    !Number.isFinite(box.height)
+  ) {
+    return null;
+  }
+
+  const x1 = Math.min(Math.max(box.x, 0), 1);
+  const y1 = Math.min(Math.max(box.y, 0), 1);
+  const x2 = Math.min(Math.max(box.x + box.width, 0), 1);
+  const y2 = Math.min(Math.max(box.y + box.height, 0), 1);
+
+  const width = x2 - x1;
+  const height = y2 - y1;
+  if (width <= 0 || height <= 0) {
+    return null;
+  }
+
+  return { x: x1, y: y1, width, height };
+}
+
+/**
  * Parse YOLO model output tensor into DetectionResult[].
  *
  * Supports YOLOv8/YOLO11 output layout where the tensor is shaped as
  * [1, (4 + numClasses), N] and stored row-major, so the Float32Array
  * is laid out as N values for row 0, then N values for row 1, etc.
  *
+ * Coordinate contract: returned boxes are normalized [0..1] fractions of the
+ * ORIGINAL image. This holds because native preprocessing stretch-resizes the
+ * full image to the model input (no letterbox/pad), so normalized model space
+ * and normalized original space coincide. If preprocessing ever switches to
+ * letterboxing, this function must un-map boxes using `originalSize` — the
+ * parameter is kept for that purpose.
+ *
  * @param outputData       Raw Float32Array from inference
  * @param config           Detector configuration
- * @param originalSize     Original image dimensions (reserved for future scaling)
+ * @param originalSize     Original image dimensions (anchor for a future
+ *                         letterbox un-mapping; unused under stretch-resize)
  */
 export function parseYoloOutput(
   outputData: Float32Array,
   config: DetectorConfig,
   originalSize: OriginalImageSize,
 ): DetectionResult[] {
-  // originalSize reserved for future coordinate scaling
+  // Unused under the stretch-resize contract documented above.
   void originalSize;
 
   const numClasses = config.classLabels.length;
@@ -182,11 +224,18 @@ export function parseYoloOutput(
       continue;
     }
 
-    const boundingBox = convertBox(boxValues, {
+    const rawBox = convertBox(boxValues, {
       boxFormat: config.outputSpec.boxFormat,
       coordinateType: config.outputSpec.coordinateType,
       inputSize: [inputHeight, inputWidth],
     });
+
+    // Clamp before NMS so IoU is computed on visible extents, and so no
+    // out-of-range box reaches native cropping, persistence, or the UI.
+    const boundingBox = clampBoxToUnitSquare(rawBox);
+    if (!boundingBox || !Number.isFinite(bestConfidence)) {
+      continue;
+    }
 
     candidates.push({
       boundingBox,

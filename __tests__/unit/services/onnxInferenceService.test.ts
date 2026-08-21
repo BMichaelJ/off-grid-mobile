@@ -80,6 +80,66 @@ describe('OnnxInferenceService', () => {
       // Should only be called once (first load)
       expect(InferenceSession.create).toHaveBeenCalledTimes(1);
     });
+
+    it('should create a single session for concurrent loads of the same path', async () => {
+      const { InferenceSession } = require('onnxruntime-react-native');
+      const mockSession = { release: jest.fn() };
+      InferenceSession.create.mockImplementation(
+        () => new Promise(resolve => setTimeout(() => resolve(mockSession), 50)),
+      );
+
+      await Promise.all([
+        onnxInferenceService.loadModel('/path/to/model.onnx', 'detector'),
+        onnxInferenceService.loadModel('/path/to/model.onnx', 'detector'),
+        onnxInferenceService.loadModel('/path/to/model.onnx', 'detector'),
+      ]);
+
+      expect(InferenceSession.create).toHaveBeenCalledTimes(1);
+      expect(onnxInferenceService.isModelLoaded('/path/to/model.onnx')).toBe(true);
+    });
+
+    it('should create separate sessions for concurrent loads of different paths', async () => {
+      const { InferenceSession } = require('onnxruntime-react-native');
+      InferenceSession.create.mockImplementation(
+        () =>
+          new Promise(resolve =>
+            setTimeout(() => resolve({ release: jest.fn() }), 50),
+          ),
+      );
+
+      await Promise.all([
+        onnxInferenceService.loadModel('/path/to/a.onnx', 'detector'),
+        onnxInferenceService.loadModel('/path/to/b.onnx', 'embedding'),
+      ]);
+
+      expect(InferenceSession.create).toHaveBeenCalledTimes(2);
+      expect(onnxInferenceService.isModelLoaded('/path/to/a.onnx')).toBe(true);
+      expect(onnxInferenceService.isModelLoaded('/path/to/b.onnx')).toBe(true);
+    });
+
+    it('should reject all concurrent callers on failure and allow a retry', async () => {
+      const { InferenceSession } = require('onnxruntime-react-native');
+      const mockSession = { release: jest.fn() };
+      InferenceSession.create.mockImplementationOnce(
+        () =>
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('load failed')), 50),
+          ),
+      );
+
+      const first = onnxInferenceService.loadModel('/path/to/model.onnx', 'detector');
+      const second = onnxInferenceService.loadModel('/path/to/model.onnx', 'detector');
+      await expect(first).rejects.toThrow('load failed');
+      await expect(second).rejects.toThrow('load failed');
+      expect(onnxInferenceService.isModelLoaded('/path/to/model.onnx')).toBe(false);
+
+      // The failed in-flight entry must be cleared so a retry can succeed
+      InferenceSession.create.mockResolvedValue(mockSession);
+      await onnxInferenceService.loadModel('/path/to/model.onnx', 'detector');
+
+      expect(InferenceSession.create).toHaveBeenCalledTimes(2);
+      expect(onnxInferenceService.isModelLoaded('/path/to/model.onnx')).toBe(true);
+    });
   });
 
   describe('unloadModel', () => {

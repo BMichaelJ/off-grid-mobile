@@ -7,14 +7,28 @@ import logger from '../../utils/logger';
 
 class OnnxInferenceService {
   private loadedModels: Map<string, LoadedModel> = new Map();
+  private loadingPromises: Map<string, Promise<void>> = new Map();
 
   async loadModel(modelPath: string, type: ModelType): Promise<void> {
     if (this.loadedModels.has(modelPath)) {
       return;
     }
-    const session = await InferenceSession.create(modelPath);
-    this.loadedModels.set(modelPath, { type, modelPath, session });
-    logger.log(`[OnnxInference] Loaded ${type} model: ${modelPath}`);
+    // Deduplicate concurrent loads of the same path: without this, both
+    // callers pass the has() check above, create two native sessions, and the
+    // second set() orphans (leaks) the first session.
+    const inFlight = this.loadingPromises.get(modelPath);
+    if (inFlight) {
+      return inFlight;
+    }
+    const loading = (async () => {
+      const session = await InferenceSession.create(modelPath);
+      this.loadedModels.set(modelPath, { type, modelPath, session });
+      logger.log(`[OnnxInference] Loaded ${type} model: ${modelPath}`);
+    })().finally(() => {
+      this.loadingPromises.delete(modelPath);
+    });
+    this.loadingPromises.set(modelPath, loading);
+    return loading;
   }
 
   /**
