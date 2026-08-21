@@ -27,10 +27,20 @@ class EmbeddingMatchService {
     for (const entry of database) {
       let bestScore = -Infinity;
       for (const embedding of entry.embeddings) {
+        // A reference vector from a different embedding space (wrong dim)
+        // would silently truncate or read undefined into NaN — skip it.
+        if (embedding.length !== queryEmbedding.length) {
+          continue;
+        }
         const score = this.cosineSimilarity(queryEmbedding, embedding);
         if (score > bestScore) {
           bestScore = score;
         }
+      }
+
+      // No valid embeddings at all → the individual cannot be scored.
+      if (bestScore === -Infinity) {
+        continue;
       }
 
       candidates.push({
