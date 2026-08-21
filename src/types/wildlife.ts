@@ -96,6 +96,14 @@ export interface EmbeddingPack {
   packDir: string;
   downloadedAt: string;
   sizeBytes: number;
+  /**
+   * Validation state. `undefined` means the pack predates validation and
+   * gets a full check on next startup; 'quarantined' packs are excluded
+   * from capture and matching until re-validated.
+   */
+  status?: 'ready' | 'quarantined';
+  validationErrors?: string[];
+  validatedAt?: string;
 }
 
 export interface PackIndividual {

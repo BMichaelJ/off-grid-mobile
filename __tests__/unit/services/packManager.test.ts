@@ -8,6 +8,10 @@ jest.mock('react-native-fs', () => ({
   stat: jest.fn(),
 }));
 
+jest.mock('../../../src/services/packManager/validator', () => ({
+  validatePack: jest.fn(),
+}));
+
 import RNFS from 'react-native-fs';
 import { packManager } from '../../../src/services/packManager';
 
@@ -161,6 +165,139 @@ describe('PackManager', () => {
       expect(result[0]).toEqual([15, 16, 17]); // offset 5 * dim 3 = byte 15
       expect(result[1]).toEqual([18, 19, 20]);
       expect(result[2]).toEqual([21, 22, 23]);
+    });
+
+    it('should throw a RangeError when the requested range exceeds the buffer', () => {
+      const embeddingDim = 3;
+      const allEmbeddings = new Float32Array([0, 1, 2, 3, 4, 5]); // 2 vectors
+
+      const individual = {
+        id: 'WB-BAD',
+        name: null,
+        alternateId: null,
+        sex: null,
+        lifeStage: null,
+        firstSeen: null,
+        lastSeen: null,
+        encounterCount: 1,
+        embeddingCount: 2,
+        embeddingOffset: 1, // (1 + 2) * 3 = 9 > 6
+        referencePhotos: [],
+        notes: null,
+      };
+
+      expect(() =>
+        packManager.getEmbeddingsForIndividual(allEmbeddings, individual, embeddingDim),
+      ).toThrow(RangeError);
+    });
+
+    it('should throw a RangeError for a negative offset', () => {
+      const allEmbeddings = new Float32Array([0, 1, 2]);
+
+      const individual = {
+        id: 'WB-NEG',
+        name: null,
+        alternateId: null,
+        sex: null,
+        lifeStage: null,
+        firstSeen: null,
+        lastSeen: null,
+        encounterCount: 1,
+        embeddingCount: 1,
+        embeddingOffset: -1,
+        referencePhotos: [],
+        notes: null,
+      };
+
+      expect(() =>
+        packManager.getEmbeddingsForIndividual(allEmbeddings, individual, 3),
+      ).toThrow(RangeError);
+    });
+  });
+
+  describe('reconcilePacks', () => {
+    const { validatePack } = require('../../../src/services/packManager/validator');
+
+    const makeStoredPack = (overrides: Record<string, unknown> = {}) => ({
+      id: 'pack-1',
+      species: 'horse',
+      featureClass: 'horse_wild+face',
+      displayName: 'Horses',
+      wildbookInstanceUrl: 'https://horses.wildbook.org',
+      exportDate: '2026-04-25T00:00:00Z',
+      individualCount: 5,
+      embeddingDim: 2152,
+      embeddingModelVersion: '4.1.0',
+      detectorModelFile: '/mock/packs/horse/models/detector.onnx',
+      embeddingsFile: '/mock/packs/horse/embeddings/embeddings.bin',
+      indexFile: '/mock/packs/horse/embeddings/index.json',
+      referencePhotosDir: '/mock/packs/horse/reference_photos',
+      packDir: '/mock/packs/horse',
+      downloadedAt: '2026-04-25T12:00:00Z',
+      sizeBytes: 9_000_000,
+      ...overrides,
+    });
+
+    it('keeps a previously validated intact pack ready using cheap mode', async () => {
+      validatePack.mockResolvedValue({ ok: true, manifest: {}, individuals: [] });
+      const pack = makeStoredPack({
+        status: 'ready',
+        validatedAt: '2026-04-25T12:00:00Z',
+      });
+
+      const result = await packManager.reconcilePacks([pack] as never[]);
+
+      expect(validatePack).toHaveBeenCalledWith('/mock/packs/horse', {
+        skipChecksums: true,
+      });
+      expect(result[0].status).toBe('ready');
+    });
+
+    it('fully validates a pack that was never validated', async () => {
+      validatePack.mockResolvedValue({ ok: true, manifest: {}, individuals: [] });
+      const pack = makeStoredPack();
+
+      const result = await packManager.reconcilePacks([pack] as never[]);
+
+      expect(validatePack).toHaveBeenCalledWith('/mock/packs/horse', {
+        skipChecksums: false,
+      });
+      expect(result[0].status).toBe('ready');
+      expect(result[0].validatedAt).toBeTruthy();
+    });
+
+    it('quarantines a pack that fails validation and records the errors', async () => {
+      validatePack.mockResolvedValue({
+        ok: false,
+        errors: [
+          { code: 'checksum-mismatch', detail: 'embeddings.bin hash differs' },
+        ],
+      });
+      const pack = makeStoredPack({ status: 'ready', validatedAt: '2026-04-25T12:00:00Z' });
+
+      const result = await packManager.reconcilePacks([pack] as never[]);
+
+      expect(result[0].status).toBe('quarantined');
+      expect(result[0].validationErrors).toEqual([
+        'checksum-mismatch: embeddings.bin hash differs',
+      ]);
+    });
+
+    it('reconciles each pack independently', async () => {
+      validatePack
+        .mockResolvedValueOnce({ ok: true, manifest: {}, individuals: [] })
+        .mockResolvedValueOnce({
+          ok: false,
+          errors: [{ code: 'file-missing', detail: 'embeddings.bin' }],
+        });
+
+      const result = await packManager.reconcilePacks([
+        makeStoredPack({ id: 'pack-good' }),
+        makeStoredPack({ id: 'pack-bad', packDir: '/mock/packs/bad' }),
+      ] as never[]);
+
+      expect(result[0].status).toBe('ready');
+      expect(result[1].status).toBe('quarantined');
     });
   });
 

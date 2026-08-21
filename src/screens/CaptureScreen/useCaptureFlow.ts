@@ -113,9 +113,13 @@ export function useCaptureFlow() {
 
       setIsProcessing(true);
       try {
+        // Quarantined packs failed integrity validation — their embeddings
+        // or index cannot be trusted until re-validated.
+        const healthyPacks = packs.filter((pack) => pack.status !== 'quarantined');
+
         // Exclude packs whose embeddings live in a different model space —
         // matching across major MiewID versions produces meaningless scores.
-        const compatiblePacks = packs.filter((pack) => {
+        const compatiblePacks = healthyPacks.filter((pack) => {
           const compatibility = checkEmbeddingModelCompatibility(
             miewidModel.version,
             pack.embeddingModelVersion,
