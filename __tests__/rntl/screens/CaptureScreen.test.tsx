@@ -106,7 +106,31 @@ const MOCK_PIPELINE_RESULT = {
   observationId: 'obs-123',
   photoUri: 'file:///mock/camera.jpg',
   detections: [],
+  errors: [],
   totalInferenceTimeMs: 150,
+};
+
+const MOCK_DETECTION = {
+  id: 'det-1',
+  observationId: 'obs-123',
+  boundingBox: { x: 0.1, y: 0.2, width: 0.3, height: 0.4 },
+  species: 'horse_wild',
+  speciesConfidence: 0.9,
+  croppedImageUri: 'file:///mock/crop.jpg',
+  embedding: [0.1, 0.2],
+  matchResult: {
+    topCandidates: [],
+    approvedIndividual: null,
+    reviewStatus: 'pending',
+  },
+  encounterFields: {
+    locationId: null,
+    sex: null,
+    lifeStage: null,
+    behavior: null,
+    submitterId: null,
+    projectId: null,
+  },
 };
 
 describe('CaptureScreen', () => {
@@ -336,6 +360,56 @@ describe('CaptureScreen', () => {
     const call = (wildlifePipeline.processPhoto as jest.Mock).mock.calls[0][0];
     expect(call.speciesConfigs).toHaveLength(1);
     expect(call.speciesConfigs[0].packId).toBe('pack-compatible');
+  });
+
+  // ==========================================================================
+  // Partial-success handling
+  // ==========================================================================
+
+  it('saves the observation and warns when some detections failed', async () => {
+    (wildlifePipeline.processPhoto as jest.Mock).mockResolvedValue({
+      ...MOCK_PIPELINE_RESULT,
+      detections: [MOCK_DETECTION],
+      errors: [
+        { species: 'zebra_plains', stage: 'detector', message: 'ONNX error' },
+      ],
+    });
+
+    const { getByTestId } = render(<CaptureScreen />);
+    fireEvent.press(getByTestId('take-photo-button'));
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('DetectionResults', {
+        observationId: 'obs-123',
+      });
+    });
+    expect(useWildlifeStore.getState().observations).toHaveLength(1);
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Some detections failed',
+      expect.stringContaining('zebra_plains'),
+    );
+  });
+
+  it('does not save an observation when everything failed', async () => {
+    (wildlifePipeline.processPhoto as jest.Mock).mockResolvedValue({
+      ...MOCK_PIPELINE_RESULT,
+      detections: [],
+      errors: [
+        { species: null, stage: 'embedding-model', message: 'model corrupt' },
+      ],
+    });
+
+    const { getByTestId } = render(<CaptureScreen />);
+    fireEvent.press(getByTestId('take-photo-button'));
+
+    await waitFor(() => {
+      expect(Alert.alert).toHaveBeenCalledWith(
+        'Detection Failed',
+        expect.stringContaining('model corrupt'),
+      );
+    });
+    expect(useWildlifeStore.getState().observations).toHaveLength(0);
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 
   // ==========================================================================

@@ -299,18 +299,121 @@ describe('WildlifePipeline', () => {
     expect(mockExtractEmbedding).toHaveBeenCalledTimes(2);
   });
 
-  it('should propagate errors when detector fails', async () => {
-    mockRunDetection.mockRejectedValueOnce(new Error('Detector ONNX error'));
+  it('should record a detector failure as an error and keep other species results', async () => {
+    const detectionResult = {
+      boundingBox: { x: 0.1, y: 0.2, width: 0.3, height: 0.4 },
+      species: 'giraffe',
+      confidence: 0.9,
+    };
+    mockRunDetection
+      .mockRejectedValueOnce(new Error('Detector ONNX error'))
+      .mockResolvedValueOnce({ results: [detectionResult], inferenceTimeMs: 100 });
+    mockExtractEmbedding.mockResolvedValue({
+      embedding: [0.1, 0.2, 0.3],
+      inferenceTimeMs: 50,
+    });
+    mockMatchEmbedding.mockReturnValue([]);
 
-    const config = makeSpeciesConfig();
-    await expect(
-      wildlifePipeline.processPhoto({
-        photoUri: 'file:///photos/fail.jpg',
-  
-        speciesConfigs: [config],
-        miewidModelPath: '/models/miewid.onnx',
-      }),
-    ).rejects.toThrow('Detector ONNX error');
+    const result = await wildlifePipeline.processPhoto({
+      photoUri: 'file:///photos/partial.jpg',
+      speciesConfigs: [
+        makeSpeciesConfig({ species: 'zebra_plains' }),
+        makeSpeciesConfig({
+          packId: 'pack-giraffe',
+          species: 'giraffe',
+          detectorModelPath: '/models/giraffe_detector.onnx',
+        }),
+      ],
+      miewidModelPath: '/models/miewid.onnx',
+    });
+
+    expect(result.detections).toHaveLength(1);
+    expect(result.detections[0].species).toBe('giraffe');
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toMatchObject({
+      species: 'zebra_plains',
+      stage: 'detector',
+      message: expect.stringContaining('Detector ONNX error'),
+    });
+  });
+
+  it('should record a per-detection failure and keep the remaining detections', async () => {
+    const makeDetection = (x: number) => ({
+      boundingBox: { x, y: 0.2, width: 0.3, height: 0.4 },
+      species: 'zebra_plains',
+      confidence: 0.9,
+    });
+    mockRunDetection.mockResolvedValueOnce({
+      results: [makeDetection(0.1), makeDetection(0.5)],
+      inferenceTimeMs: 100,
+    });
+    mockExtractEmbedding
+      .mockRejectedValueOnce(new Error('embedding blew up'))
+      .mockResolvedValueOnce({ embedding: [0.1, 0.2, 0.3], inferenceTimeMs: 50 });
+    mockMatchEmbedding.mockReturnValue([]);
+
+    const result = await wildlifePipeline.processPhoto({
+      photoUri: 'file:///photos/two-animals.jpg',
+      speciesConfigs: [makeSpeciesConfig()],
+      miewidModelPath: '/models/miewid.onnx',
+    });
+
+    expect(result.detections).toHaveLength(1);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toMatchObject({
+      species: 'zebra_plains',
+      stage: 'embedding',
+      message: expect.stringContaining('embedding blew up'),
+    });
+  });
+
+  it('should fail fast with an embedding-model error when MiewID cannot load', async () => {
+    // MiewID is the first load attempt (fail-fast contract)
+    mockIsModelLoaded.mockReturnValueOnce(false);
+    mockLoadModel.mockRejectedValueOnce(new Error('MiewID file corrupt'));
+
+    const result = await wildlifePipeline.processPhoto({
+      photoUri: 'file:///photos/test.jpg',
+      speciesConfigs: [makeSpeciesConfig()],
+      miewidModelPath: '/models/miewid.onnx',
+    });
+
+    expect(result.detections).toHaveLength(0);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toMatchObject({
+      species: null,
+      stage: 'embedding-model',
+      message: expect.stringContaining('MiewID file corrupt'),
+    });
+    // No detector work is wasted when embeddings are impossible
+    expect(mockRunDetection).not.toHaveBeenCalled();
+  });
+
+  it('should return an empty errors array on full success', async () => {
+    mockRunDetection.mockResolvedValueOnce({
+      results: [
+        {
+          boundingBox: { x: 0.1, y: 0.2, width: 0.3, height: 0.4 },
+          species: 'zebra_plains',
+          confidence: 0.9,
+        },
+      ],
+      inferenceTimeMs: 100,
+    });
+    mockExtractEmbedding.mockResolvedValueOnce({
+      embedding: [0.1, 0.2, 0.3],
+      inferenceTimeMs: 50,
+    });
+    mockMatchEmbedding.mockReturnValue([]);
+
+    const result = await wildlifePipeline.processPhoto({
+      photoUri: 'file:///photos/test.jpg',
+      speciesConfigs: [makeSpeciesConfig()],
+      miewidModelPath: '/models/miewid.onnx',
+    });
+
+    expect(result.errors).toEqual([]);
+    expect(result.detections).toHaveLength(1);
   });
 
   it('should accumulate inference time from detection and embedding', async () => {

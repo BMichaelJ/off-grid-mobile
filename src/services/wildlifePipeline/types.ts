@@ -20,9 +20,29 @@ export interface ProcessPhotoParams {
   };
 }
 
+export type PipelineErrorStage =
+  | 'embedding-model'
+  | 'detector'
+  | 'crop'
+  | 'embedding'
+  | 'match';
+
+export interface PipelineError {
+  /** Species whose processing failed; null for photo-wide failures. */
+  species: string | null;
+  stage: PipelineErrorStage;
+  message: string;
+}
+
 export interface PipelineResult {
   observationId: string;
   photoUri: string;
   detections: Detection[];
+  /**
+   * Per-species / per-detection failures. Detections that completed are
+   * always returned even when other work failed — callers decide whether a
+   * partial observation is worth saving.
+   */
+  errors: PipelineError[];
   totalInferenceTimeMs: number;
 }

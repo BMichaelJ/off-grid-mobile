@@ -163,6 +163,17 @@ export function useCaptureFlow() {
           miewidModelPath: miewidModel.path,
         });
 
+        // Total failure: nothing completed, nothing worth saving.
+        if (result.detections.length === 0 && result.errors.length > 0) {
+          Alert.alert(
+            'Detection Failed',
+            result.errors
+              .map((e) => (e.species ? `${e.species}: ${e.message}` : e.message))
+              .join('\n'),
+          );
+          return;
+        }
+
         // Save observation to store
         useWildlifeStore.getState().addObservation({
           id: result.observationId,
@@ -178,6 +189,17 @@ export function useCaptureFlow() {
         navigation.navigate('DetectionResults', {
           observationId: result.observationId,
         });
+
+        // Partial failure: the observation is saved with what completed;
+        // tell the user what was lost.
+        if (result.errors.length > 0) {
+          Alert.alert(
+            'Some detections failed',
+            result.errors
+              .map((e) => (e.species ? `${e.species}: ${e.message}` : e.message))
+              .join('\n'),
+          );
+        }
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Unknown error';
