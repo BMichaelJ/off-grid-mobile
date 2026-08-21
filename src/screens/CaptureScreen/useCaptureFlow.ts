@@ -9,7 +9,7 @@ import { useWildlifeStore } from '../../stores/wildlifeStore';
 import { packManager } from '../../services/packManager';
 import { checkEmbeddingModelCompatibility } from '../../services/miewidModelManager';
 import type { SpeciesConfig } from '../../services/wildlifePipeline/types';
-import type { DetectorConfig, MiewIDModelStatus } from '../../types';
+import type { DetectorConfig, EmbeddingPackManifest, MiewIDModelStatus } from '../../types';
 import type { RootStackParamList } from '../../navigation/types';
 import logger from '../../utils/logger';
 
@@ -20,9 +20,14 @@ import logger from '../../utils/logger';
  * TODO(P0): Once packs include real detector_config.json files,
  * remove the fallback and require the config to exist.
  */
-async function loadDetectorConfig(packDir: string): Promise<DetectorConfig> {
+async function loadDetectorConfig(
+  packDir: string,
+  manifest: EmbeddingPackManifest | null,
+): Promise<DetectorConfig> {
   try {
-    const manifest = await packManager.loadManifest(`${packDir}/manifest.json`);
+    if (!manifest) {
+      return DEFAULT_DETECTOR_CONFIG;
+    }
     const configPath = `${packDir}/${manifest.detectorModel.configFile}`;
     const RNFS = require('react-native-fs');
     const content = await RNFS.readFile(configPath, 'utf8');
@@ -30,6 +35,17 @@ async function loadDetectorConfig(packDir: string): Promise<DetectorConfig> {
   } catch {
     // Fallback until packs ship real detector configs
     return DEFAULT_DETECTOR_CONFIG;
+  }
+}
+
+/** Load a pack's manifest, or null when unreadable (fallbacks apply). */
+async function loadManifestSafe(
+  packDir: string,
+): Promise<EmbeddingPackManifest | null> {
+  try {
+    return await packManager.loadManifest(`${packDir}/manifest.json`);
+  } catch {
+    return null;
   }
 }
 
@@ -138,20 +154,40 @@ export function useCaptureFlow() {
           return true;
         });
 
-        // Build species configs from loaded packs with merged embedding databases
+        // Group packs by compatibility identity: packs sharing a detector
+        // and embedding space run ONE detector pass and match against ONE
+        // merged database. Distinct groups (different feature class or
+        // detector) each get their own pass — never a mixed database.
+        const groups = new Map<string, typeof compatiblePacks>();
+        for (const pack of compatiblePacks) {
+          const key = [
+            pack.species,
+            pack.featureClass,
+            pack.detectorModelFile,
+            pack.embeddingModelVersion,
+          ].join('|');
+          groups.set(key, [...(groups.get(key) ?? []), pack]);
+        }
+
         const { localIndividuals } = useWildlifeStore.getState();
         const speciesConfigs: SpeciesConfig[] = await Promise.all(
-          compatiblePacks.map(async (pack) => ({
-            packId: pack.id,
-            species: pack.species,
-            detectorModelPath: pack.detectorModelFile,
-            detectorConfig: await loadDetectorConfig(pack.packDir),
-            embeddingDatabase: await buildEmbeddingDatabase(
-              pack.species,
-              compatiblePacks,
-              localIndividuals,
-            ),
-          })),
+          Array.from(groups.values()).map(async (groupPacks) => {
+            const primary = groupPacks[0];
+            const manifest = await loadManifestSafe(primary.packDir);
+            return {
+              packId: primary.id,
+              species: primary.species,
+              detectorModelPath: primary.detectorModelFile,
+              detectorConfig: await loadDetectorConfig(primary.packDir, manifest),
+              embeddingDatabase: await buildEmbeddingDatabase(
+                primary.species,
+                groupPacks,
+                localIndividuals,
+              ),
+              embeddingInputSize: manifest?.embeddingModel.inputSize,
+              embeddingNormalize: manifest?.embeddingModel.normalize,
+            };
+          }),
         );
 
         const gps = await getDeviceLocation();

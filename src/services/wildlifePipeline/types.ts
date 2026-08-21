@@ -7,6 +7,16 @@ export interface SpeciesConfig {
   detectorModelPath: string;
   detectorConfig: DetectorConfig;
   embeddingDatabase: EmbeddingDatabaseEntry[];
+  /**
+   * Embedding preprocessing from the pack's manifest (`embeddingModel`).
+   * When absent, the pipeline falls back to the photo-level params and
+   * finally to the MiewID v4 defaults (440×440, ImageNet).
+   */
+  embeddingInputSize?: [number, number];
+  embeddingNormalize?: {
+    mean: [number, number, number];
+    std: [number, number, number];
+  };
 }
 
 export interface ProcessPhotoParams {

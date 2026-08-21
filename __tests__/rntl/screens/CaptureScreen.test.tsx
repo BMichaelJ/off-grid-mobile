@@ -343,6 +343,81 @@ describe('CaptureScreen', () => {
     expect(call.speciesConfigs[0].packId).toBe('pack-healthy');
   });
 
+  it('runs one detector per compatibility group when packs share species and detector', async () => {
+    useWildlifeStore.setState({
+      packs: [
+        makeTestPack({ id: 'pack-a' }),
+        makeTestPack({ id: 'pack-b', displayName: 'Second horse pack' }),
+      ],
+    });
+
+    const { getByTestId } = render(<CaptureScreen />);
+    fireEvent.press(getByTestId('take-photo-button'));
+
+    await waitFor(() => {
+      expect(wildlifePipeline.processPhoto).toHaveBeenCalled();
+    });
+    const call = (wildlifePipeline.processPhoto as jest.Mock).mock.calls[0][0];
+    // Same {species, featureClass, detector, embeddingModelVersion} → one group
+    expect(call.speciesConfigs).toHaveLength(1);
+    // The merged database must have been built from BOTH packs of the group
+    const { buildEmbeddingDatabase } = require('../../../src/services/embeddingDatabaseBuilder');
+    const dbCall = (buildEmbeddingDatabase as jest.Mock).mock.calls[0];
+    expect(dbCall[1].map((p: { id: string }) => p.id).sort()).toEqual([
+      'pack-a',
+      'pack-b',
+    ]);
+  });
+
+  it('keeps packs with different feature classes in separate groups', async () => {
+    useWildlifeStore.setState({
+      packs: [
+        makeTestPack({ id: 'pack-face', featureClass: 'horse_wild+face' }),
+        makeTestPack({
+          id: 'pack-flank',
+          featureClass: 'horse_wild+flank',
+          detectorModelFile: '/packs/horse/models/flank_detector.onnx',
+        }),
+      ],
+    });
+
+    const { getByTestId } = render(<CaptureScreen />);
+    fireEvent.press(getByTestId('take-photo-button'));
+
+    await waitFor(() => {
+      expect(wildlifePipeline.processPhoto).toHaveBeenCalled();
+    });
+    const call = (wildlifePipeline.processPhoto as jest.Mock).mock.calls[0][0];
+    expect(call.speciesConfigs).toHaveLength(2);
+  });
+
+  it("passes the pack's embedding input config through to the pipeline", async () => {
+    const { packManager } = require('../../../src/services/packManager');
+    (packManager.loadManifest as jest.Mock).mockResolvedValue({
+      embeddingModel: {
+        name: 'miewid-v4',
+        version: '4.1.0',
+        inputSize: [416, 416],
+        normalize: { mean: [0.5, 0.5, 0.5], std: [0.25, 0.25, 0.25] },
+      },
+      detectorModel: { filename: 'detector.onnx', configFile: 'config/detector.json' },
+    });
+    useWildlifeStore.setState({ packs: [makeTestPack()] });
+
+    const { getByTestId } = render(<CaptureScreen />);
+    fireEvent.press(getByTestId('take-photo-button'));
+
+    await waitFor(() => {
+      expect(wildlifePipeline.processPhoto).toHaveBeenCalled();
+    });
+    const call = (wildlifePipeline.processPhoto as jest.Mock).mock.calls[0][0];
+    expect(call.speciesConfigs[0].embeddingInputSize).toEqual([416, 416]);
+    expect(call.speciesConfigs[0].embeddingNormalize).toEqual({
+      mean: [0.5, 0.5, 0.5],
+      std: [0.25, 0.25, 0.25],
+    });
+  });
+
   it('excludes packs with an incompatible embedding model version', async () => {
     useWildlifeStore.setState({
       packs: [

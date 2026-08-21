@@ -165,7 +165,10 @@ class WildlifePipeline {
       const embeddingOutput = await onnxInferenceService.extractEmbedding(
         croppedImageUri,
         args.miewidModelPath,
-        { inputSize: args.embeddingInputSize, normalize: args.embeddingNormalize },
+        {
+          inputSize: config.embeddingInputSize ?? args.embeddingInputSize,
+          normalize: config.embeddingNormalize ?? args.embeddingNormalize,
+        },
       );
 
       stage = 'match';
