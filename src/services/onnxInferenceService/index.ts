@@ -99,10 +99,22 @@ class OnnxInferenceService {
         [1, config.inputChannels, height, width],
       );
 
-      // Discover tensor names from the session
+      // Discover tensor names from the session, validating the I/O contract
+      // instead of dereferencing blind (garbage models fail with actionable
+      // errors, not opaque TypeErrors).
       const inputName = session.inputNames[0];
+      if (!inputName) {
+        throw new Error(
+          `Detector model at ${detectorModelPath} exposes no inputs`,
+        );
+      }
       const outputName =
         config.outputSpec.outputTensorName ?? session.outputNames[0];
+      if (!session.outputNames.includes(outputName)) {
+        throw new Error(
+          `Detector output tensor '${outputName}' not found in model at ${detectorModelPath} (available: ${session.outputNames.join(', ')})`,
+        );
+      }
 
       // Run inference
       const startTime = Date.now();
@@ -111,6 +123,11 @@ class OnnxInferenceService {
 
       // Extract output tensor data
       const outputTensor = results[outputName];
+      if (!outputTensor?.data) {
+        throw new Error(
+          `Detector inference returned no '${outputName}' tensor for model at ${detectorModelPath}`,
+        );
+      }
       const outputData = new Float32Array(
         outputTensor.data as ArrayLike<number>,
       );
@@ -144,6 +161,8 @@ class OnnxInferenceService {
         mean: [number, number, number];
         std: [number, number, number];
       };
+      /** Expected embedding dimensionality (e.g. a pack's embeddingDim). */
+      expectedDim?: number;
     },
   ): Promise<EmbeddingOutput> {
     const loaded = this.loadedModels.get(miewidModelPath);
@@ -167,6 +186,11 @@ class OnnxInferenceService {
       const inputTensor = new Tensor('float32', tensorData, [1, 3, h, w]);
 
       const inputName = session.inputNames[0];
+      if (!inputName) {
+        throw new Error(
+          `Embedding model at ${miewidModelPath} exposes no inputs`,
+        );
+      }
 
       // Run inference
       const startTime = Date.now();
@@ -176,7 +200,17 @@ class OnnxInferenceService {
       // Extract embedding from first output tensor
       const outputName = session.outputNames[0];
       const embeddingTensor = results[outputName];
+      if (!embeddingTensor?.data) {
+        throw new Error(
+          `Embedding inference returned no '${outputName}' tensor for model at ${miewidModelPath}`,
+        );
+      }
       const embedding = Array.from(embeddingTensor.data as Float32Array);
+      if (opts?.expectedDim != null && embedding.length !== opts.expectedDim) {
+        throw new Error(
+          `Embedding dimension mismatch for model at ${miewidModelPath}: expected ${opts.expectedDim}, got ${embedding.length}`,
+        );
+      }
 
       logger.log(
         `[OnnxInference] Embedding: ${embedding.length}-dim in ${inferenceTimeMs}ms`,

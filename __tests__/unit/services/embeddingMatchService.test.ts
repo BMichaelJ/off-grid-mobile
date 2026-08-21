@@ -99,5 +99,59 @@ describe('EmbeddingMatchService', () => {
       expect(results[0].source).toBe('pack');
       expect(results[1].source).toBe('local');
     });
+
+    it('should skip reference embeddings whose dimension differs from the query', () => {
+      const database = [
+        {
+          individualId: 'short-ref',
+          source: 'local' as const,
+          embeddings: [[1]], // wrong dimension — must not produce a score
+          refPhotoIndex: 0,
+        },
+        {
+          individualId: 'good-ref',
+          source: 'pack' as const,
+          embeddings: [[1, 0, 0]],
+          refPhotoIndex: 0,
+        },
+      ];
+
+      const results = embeddingMatchService.matchEmbedding([1, 0, 0], database, 5);
+
+      expect(results).toHaveLength(1);
+      expect(results[0].individualId).toBe('good-ref');
+      expect(Number.isFinite(results[0].score)).toBe(true);
+    });
+
+    it('should keep an individual if at least one of its embeddings is valid', () => {
+      const database = [
+        {
+          individualId: 'mixed',
+          source: 'pack' as const,
+          embeddings: [[1], [0.9, 0.1, 0]], // one bad, one good
+          refPhotoIndex: 0,
+        },
+      ];
+
+      const results = embeddingMatchService.matchEmbedding([1, 0, 0], database, 5);
+
+      expect(results).toHaveLength(1);
+      expect(Number.isFinite(results[0].score)).toBe(true);
+    });
+
+    it('should never emit NaN scores for malformed references', () => {
+      const database = [
+        {
+          individualId: 'bad',
+          source: 'pack' as const,
+          embeddings: [[1, 0, 0, 0, 0]], // longer than query
+          refPhotoIndex: 0,
+        },
+      ];
+
+      const results = embeddingMatchService.matchEmbedding([1, 0, 0], database, 5);
+
+      expect(results).toEqual([]);
+    });
   });
 });

@@ -246,6 +246,111 @@ describe('OnnxInferenceService', () => {
     });
   });
 
+  describe('I/O contract validation', () => {
+    it('should reject when the configured output tensor name is not in the session', async () => {
+      const { InferenceSession } = require('onnxruntime-react-native');
+      InferenceSession.create.mockResolvedValue({
+        release: jest.fn(),
+        inputNames: ['images'],
+        outputNames: ['output0'],
+        run: jest.fn(),
+      });
+      await onnxInferenceService.loadModel('/models/det.onnx', 'detector');
+
+      await expect(
+        onnxInferenceService.runDetection(
+          'file:///photo.jpg',
+          '/models/det.onnx',
+          makeDetectorConfig({
+            outputSpec: {
+              boxFormat: 'cxcywh',
+              coordinateType: 'absolute',
+              outputTensorName: 'nonexistent_tensor',
+              layout: '1x5xN',
+            },
+          }),
+        ),
+      ).rejects.toThrow(/nonexistent_tensor.*output0/s);
+    });
+
+    it('should reject with a clear error when the detection output tensor is missing', async () => {
+      const { InferenceSession } = require('onnxruntime-react-native');
+      InferenceSession.create.mockResolvedValue({
+        release: jest.fn(),
+        inputNames: ['images'],
+        outputNames: ['output0'],
+        run: jest.fn().mockResolvedValue({}), // no output tensor at all
+      });
+      await onnxInferenceService.loadModel('/models/det.onnx', 'detector');
+
+      await expect(
+        onnxInferenceService.runDetection(
+          'file:///photo.jpg',
+          '/models/det.onnx',
+          makeDetectorConfig(),
+        ),
+      ).rejects.toThrow(/output0/);
+    });
+
+    it('should reject when a session exposes no inputs', async () => {
+      const { InferenceSession } = require('onnxruntime-react-native');
+      InferenceSession.create.mockResolvedValue({
+        release: jest.fn(),
+        inputNames: [],
+        outputNames: ['output0'],
+        run: jest.fn(),
+      });
+      await onnxInferenceService.loadModel('/models/det.onnx', 'detector');
+
+      await expect(
+        onnxInferenceService.runDetection(
+          'file:///photo.jpg',
+          '/models/det.onnx',
+          makeDetectorConfig(),
+        ),
+      ).rejects.toThrow(/no inputs/i);
+    });
+
+    it('should reject when the embedding output tensor is missing', async () => {
+      const { InferenceSession } = require('onnxruntime-react-native');
+      InferenceSession.create.mockResolvedValue({
+        release: jest.fn(),
+        inputNames: ['input'],
+        outputNames: ['embedding'],
+        run: jest.fn().mockResolvedValue({}),
+      });
+      await onnxInferenceService.loadModel('/models/miewid.onnx', 'embedding');
+
+      await expect(
+        onnxInferenceService.extractEmbedding(
+          'file:///crop.jpg',
+          '/models/miewid.onnx',
+        ),
+      ).rejects.toThrow(/embedding/);
+    });
+
+    it('should reject when the embedding dimension differs from expectedDim', async () => {
+      const { InferenceSession } = require('onnxruntime-react-native');
+      InferenceSession.create.mockResolvedValue({
+        release: jest.fn(),
+        inputNames: ['input'],
+        outputNames: ['embedding'],
+        run: jest.fn().mockResolvedValue({
+          embedding: { data: new Float32Array([0.1, 0.2, 0.3]) },
+        }),
+      });
+      await onnxInferenceService.loadModel('/models/miewid.onnx', 'embedding');
+
+      await expect(
+        onnxInferenceService.extractEmbedding(
+          'file:///crop.jpg',
+          '/models/miewid.onnx',
+          { expectedDim: 2152 },
+        ),
+      ).rejects.toThrow(/2152.*3|3.*2152/s);
+    });
+  });
+
   describe('runDetection', () => {
     it('should throw if model is not loaded', async () => {
       await expect(
