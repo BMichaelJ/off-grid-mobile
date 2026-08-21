@@ -61,7 +61,9 @@ import dataclasses
 import hashlib
 import json
 import logging
+import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -74,8 +76,14 @@ logger = logging.getLogger("export_miewid_v41")
 # Defaults derived from miew_id.msv4_1_main.yaml
 # ----------------------------------------------------------------------------
 
-DEFAULT_CHECKPOINT = "/mnt/c/claude-skills/models/reference/miew_id.msv4_1_main.bin"
-DEFAULT_CONFIG = "/mnt/c/claude-skills/models/reference/miew_id.msv4_1_main.yaml"
+DEFAULT_CHECKPOINT = os.environ.get(
+    "MIEWID_CHECKPOINT",
+    "/mnt/c/claude-skills/models/reference/miew_id.msv4_1_main.bin",
+)
+DEFAULT_CONFIG = os.environ.get(
+    "MIEWID_CONFIG",
+    "/mnt/c/claude-skills/models/reference/miew_id.msv4_1_main.yaml",
+)
 DEFAULT_OUTPUT_DIR = "output"
 
 EXPECTED_EMBEDDING_DIM = 2152  # EfficientNetV2-RW-M GeM-pooled feature dim per pack spec
@@ -532,7 +540,7 @@ def main(argv=None) -> int:
     # Manifest
     manifest = {
         "schema_version": "1",
-        "exported_at": __import__("datetime").datetime.utcnow().isoformat() + "Z",
+        "exported_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "source": {
             "checkpoint": str(checkpoint),
             "checkpoint_sha256": sha256_of_file(checkpoint),
