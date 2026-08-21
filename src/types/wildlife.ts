@@ -1,3 +1,30 @@
+// === MiewID Model Types ===
+
+export type MiewIDModelStatus =
+  | 'missing'
+  | 'downloading'
+  | 'ready'
+  | 'corrupt'
+  | 'incompatible';
+
+/**
+ * Persisted identity of the installed MiewID embedding model.
+ *
+ * `sha256`/`sizeBytes` are null only for records migrated from the legacy
+ * bare-path format; startup reconciliation backfills them. `verifiedAt` is
+ * the timestamp of the last successful full-hash verification — while it is
+ * set, reconciliation only re-checks existence and size.
+ */
+export interface MiewIDModelRecord {
+  path: string;
+  name: string;
+  version: string;
+  sha256: string | null;
+  sizeBytes: number | null;
+  status: MiewIDModelStatus;
+  verifiedAt: string | null;
+}
+
 // === Embedding Pack Types ===
 
 export interface EmbeddingPackManifest {

@@ -5,3 +5,4 @@ export { packManager } from './packManager';
 export { embeddingMatchService } from './embeddingMatchService';
 export { buildEmbeddingDatabase } from './embeddingDatabaseBuilder';
 export { wildlifePipeline } from './wildlifePipeline';
+export { reconcileMiewidModel, checkEmbeddingModelCompatibility } from './miewidModelManager';
