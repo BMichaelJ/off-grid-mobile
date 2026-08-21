@@ -49,6 +49,8 @@ Tasks:
 
 ### Stage 2 — In-App Acquisition (expanded based on [codex 5.5 Stage-2 risk review, 2026-04-24](../reports/2026-04-24-codex-5-5-stage-2-risk-review.md))
 
+> **2026-08-20 addendum** (see [codex re-evaluation](../reports/2026-08-20-codex-reeval.md)): a pre-Stage-2 correctness PR landed first — box corner-clamping to the unit square + `loadModel` promise-dedup (PR #17). **2.1 done** (PR #18: `MiewIDModelRecord`, persist v1 migration, startup reconciliation, capture gate + compatibility filter). **2.2 done** (`feat/pack-validator`: validator + quarantine + `setPacks` + bounds-checked `getEmbeddingsForIndividual`). **2.3 done** (`feat/model-download-service`: staging + SHA-256 + atomic move + retry/backoff + `acquireMiewidModel`; hosting still open — URL/hash live in `src/config/modelSources.ts`). New codex findings folded in: pack `embeddingModel.inputSize/normalize` ignored by capture → 2.4; embedding-dim validation in matcher → 2.7.
+
 The original "add a download service + wire the path" framing was too thin. Before any download work is meaningful we need a model state machine, a versioned identity record, and a pack validator. These also unlock fixes for lifecycle races and partial-success observations that are currently latent bugs.
 
 - **2.1** **Model record + state machine.** Define `MiewIDModelRecord { path, name, version, sha256, sizeBytes, status }` with states `missing | downloading | ready | corrupt | incompatible`. Replace `wildlifeStore.miewidModelPath: string | null`. Reconcile on app startup — verify file existence + hash + optionally resume in-flight downloads.

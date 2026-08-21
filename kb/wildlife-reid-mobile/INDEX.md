@@ -40,6 +40,8 @@
 | Output | Format | Date |
 |---|---|---|
 | [MiewID v4.1 On-Device Integration Plan](outputs/plans/miewid-v41-integration-plan.md) | plan | 2026-04-22 |
+| [Codex 5.5 Stage-2 Risk Review](outputs/reports/2026-04-24-codex-5-5-stage-2-risk-review.md) | report | 2026-04-24 |
+| [Codex Re-evaluation + PR-0 Vetting](outputs/reports/2026-08-20-codex-reeval.md) | report | 2026-08-20 |
 
 ## Coverage Gaps
 
