@@ -6,6 +6,8 @@ import type {
   Observation,
   Detection,
   LocalIndividual,
+  MiewIDModelRecord,
+  MiewIDModelStatus,
   SyncQueueItem,
 } from '../types';
 
@@ -19,7 +21,7 @@ interface WildlifeState {
   observations: Observation[];
   localIndividuals: LocalIndividual[];
   syncQueue: SyncQueueItem[];
-  miewidModelPath: string | null;
+  miewidModel: MiewIDModelRecord | null;
   nextFieldId: number;
 
   // Pack actions
@@ -52,8 +54,9 @@ interface WildlifeState {
     updates: Partial<SyncQueueItem>,
   ) => void;
 
-  // MiewID model path
-  setMiewidModelPath: (path: string | null) => void;
+  // MiewID model record
+  setMiewidModel: (record: MiewIDModelRecord | null) => void;
+  updateMiewidModelStatus: (status: MiewIDModelStatus) => void;
 
   // Reset
   reset: () => void;
@@ -68,7 +71,7 @@ const INITIAL_STATE = {
   observations: [] as Observation[],
   localIndividuals: [] as LocalIndividual[],
   syncQueue: [] as SyncQueueItem[],
-  miewidModelPath: null as string | null,
+  miewidModel: null as MiewIDModelRecord | null,
   nextFieldId: 1,
 };
 
@@ -158,8 +161,15 @@ export const useWildlifeStore = create<WildlifeState>()(
           ),
         })),
 
-      // ---- MiewID model path ----------------------------------------------
-      setMiewidModelPath: (path) => set({ miewidModelPath: path }),
+      // ---- MiewID model record ---------------------------------------------
+      setMiewidModel: (record) => set({ miewidModel: record }),
+
+      updateMiewidModelStatus: (status) =>
+        set((state) =>
+          state.miewidModel
+            ? { miewidModel: { ...state.miewidModel, status } }
+            : {},
+        ),
 
       // ---- Reset ----------------------------------------------------------
       reset: () => set({ ...INITIAL_STATE }),
@@ -167,12 +177,35 @@ export const useWildlifeStore = create<WildlifeState>()(
     {
       name: 'wildlife-store',
       storage: createJSONStorage(() => AsyncStorage),
+      version: 1,
+      migrate: (persisted, fromVersion) => {
+        const state = persisted as Record<string, unknown>;
+        if (fromVersion < 1) {
+          // v0 persisted a bare `miewidModelPath: string | null`. Wrap it in
+          // a MiewIDModelRecord with status 'missing'; startup reconciliation
+          // promotes it to 'ready' if the file checks out on disk.
+          const legacyPath = state.miewidModelPath as string | null | undefined;
+          state.miewidModel = legacyPath
+            ? ({
+                path: legacyPath,
+                name: 'miewid',
+                version: 'unknown',
+                sha256: null,
+                sizeBytes: null,
+                status: 'missing',
+                verifiedAt: null,
+              } satisfies MiewIDModelRecord)
+            : null;
+          delete state.miewidModelPath;
+        }
+        return state;
+      },
       partialize: (state) => ({
         packs: state.packs,
         observations: state.observations,
         localIndividuals: state.localIndividuals,
         syncQueue: state.syncQueue,
-        miewidModelPath: state.miewidModelPath,
+        miewidModel: state.miewidModel,
         nextFieldId: state.nextFieldId,
       }),
     },

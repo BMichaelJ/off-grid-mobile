@@ -11,7 +11,12 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { AppNavigator } from './src/navigation';
 import { useTheme } from './src/theme';
-import { hardwareService, authService, packManager } from './src/services';
+import {
+  hardwareService,
+  authService,
+  packManager,
+  reconcileMiewidModel,
+} from './src/services';
 import logger from './src/utils/logger';
 import { useAppStore, useAuthStore, useWildlifeStore } from './src/stores';
 import { LockScreen } from './src/screens';
@@ -92,6 +97,20 @@ function App() {
         logger.log('[App] Pack manager initialized');
       } catch (err) {
         logger.error('[App] Failed to initialize pack manager:', err);
+      }
+
+      // Reconcile the persisted MiewID model record against the filesystem —
+      // the store may confidently claim a model that was evicted, truncated,
+      // or never finished downloading.
+      try {
+        const { miewidModel, setMiewidModel } = useWildlifeStore.getState();
+        const reconciled = await reconcileMiewidModel(miewidModel);
+        setMiewidModel(reconciled);
+        logger.log(
+          `[App] MiewID model reconciled: ${reconciled ? reconciled.status : 'none'}`,
+        );
+      } catch (err) {
+        logger.error('[App] Failed to reconcile MiewID model:', err);
       }
 
       // Initialize hardware detection

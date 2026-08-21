@@ -7,9 +7,11 @@ import { wildlifePipeline } from '../../services/wildlifePipeline';
 import { buildEmbeddingDatabase } from '../../services/embeddingDatabaseBuilder';
 import { useWildlifeStore } from '../../stores/wildlifeStore';
 import { packManager } from '../../services/packManager';
+import { checkEmbeddingModelCompatibility } from '../../services/miewidModelManager';
 import type { SpeciesConfig } from '../../services/wildlifePipeline/types';
-import type { DetectorConfig } from '../../types';
+import type { DetectorConfig, MiewIDModelStatus } from '../../types';
 import type { RootStackParamList } from '../../navigation/types';
+import logger from '../../utils/logger';
 
 /**
  * Load the detector config JSON from the pack directory.
@@ -79,32 +81,70 @@ function getDeviceInfo(): { model: string; os: string } {
   };
 }
 
+/** Human-readable explanation for each non-ready model status. */
+const MODEL_STATUS_MESSAGES: Record<Exclude<MiewIDModelStatus, 'ready'>, string> = {
+  missing:
+    'The MiewID embedding model is not installed on this device. Download it from Settings before capturing.',
+  downloading:
+    'The MiewID embedding model is still downloading. Try again once the download completes.',
+  corrupt:
+    'The installed MiewID embedding model file is corrupt. Re-download it from Settings.',
+  incompatible:
+    'The installed MiewID embedding model is incompatible with the loaded packs. Update the model or packs.',
+};
+
 export function useCaptureFlow() {
   const [isProcessing, setIsProcessing] = useState(false);
   const navigation = useNavigation<NavigationProp>();
   const packs = useWildlifeStore((s) => s.packs);
-  const miewidModelPath = useWildlifeStore((s) => s.miewidModelPath);
+  const miewidModel = useWildlifeStore((s) => s.miewidModel);
 
   const processPhoto = useCallback(
     async (photoUri: string) => {
-      if (!miewidModelPath) {
-        Alert.alert('Error', 'MiewID model not loaded');
+      if (!miewidModel || miewidModel.status !== 'ready') {
+        const message = miewidModel
+          ? MODEL_STATUS_MESSAGES[
+              miewidModel.status as Exclude<MiewIDModelStatus, 'ready'>
+            ]
+          : MODEL_STATUS_MESSAGES.missing;
+        Alert.alert('MiewID model not ready', message);
         return;
       }
 
       setIsProcessing(true);
       try {
+        // Exclude packs whose embeddings live in a different model space —
+        // matching across major MiewID versions produces meaningless scores.
+        const compatiblePacks = packs.filter((pack) => {
+          const compatibility = checkEmbeddingModelCompatibility(
+            miewidModel.version,
+            pack.embeddingModelVersion,
+          );
+          if (compatibility === 'incompatible') {
+            logger.warn(
+              `[CaptureFlow] Excluding pack ${pack.id}: embedding model ${pack.embeddingModelVersion} incompatible with installed ${miewidModel.version}`,
+            );
+            return false;
+          }
+          if (compatibility === 'minor-mismatch') {
+            logger.warn(
+              `[CaptureFlow] Pack ${pack.id} embedding model ${pack.embeddingModelVersion} minor-mismatches installed ${miewidModel.version}; proceeding`,
+            );
+          }
+          return true;
+        });
+
         // Build species configs from loaded packs with merged embedding databases
         const { localIndividuals } = useWildlifeStore.getState();
         const speciesConfigs: SpeciesConfig[] = await Promise.all(
-          packs.map(async (pack) => ({
+          compatiblePacks.map(async (pack) => ({
             packId: pack.id,
             species: pack.species,
             detectorModelPath: pack.detectorModelFile,
             detectorConfig: await loadDetectorConfig(pack.packDir),
             embeddingDatabase: await buildEmbeddingDatabase(
               pack.species,
-              packs,
+              compatiblePacks,
               localIndividuals,
             ),
           })),
@@ -116,7 +156,7 @@ export function useCaptureFlow() {
         const result = await wildlifePipeline.processPhoto({
           photoUri,
           speciesConfigs,
-          miewidModelPath,
+          miewidModelPath: miewidModel.path,
         });
 
         // Save observation to store
@@ -142,7 +182,7 @@ export function useCaptureFlow() {
         setIsProcessing(false);
       }
     },
-    [miewidModelPath, packs, navigation],
+    [miewidModel, packs, navigation],
   );
 
   const takePhoto = useCallback(async () => {

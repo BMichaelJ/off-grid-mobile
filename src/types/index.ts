@@ -28,6 +28,8 @@ export interface OnboardingStep {
 
 // Wildlife types
 export type {
+  MiewIDModelStatus,
+  MiewIDModelRecord,
   EmbeddingPackManifest,
   DetectorConfig,
   EmbeddingPack,

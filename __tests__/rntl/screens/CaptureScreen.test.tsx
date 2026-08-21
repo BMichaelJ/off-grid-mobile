@@ -82,6 +82,26 @@ const mockProcessPhoto = wildlifePipeline.processPhoto as jest.Mock;
 const mockLaunchCamera = launchCamera as jest.Mock;
 const mockLaunchImageLibrary = launchImageLibrary as jest.Mock;
 
+const makeTestPack = (overrides: Record<string, unknown> = {}) => ({
+  id: 'pack-1',
+  species: 'horse_wild',
+  featureClass: 'face',
+  displayName: 'Wild Horse - Face',
+  wildbookInstanceUrl: 'https://horses.wildbook.org',
+  exportDate: '2026-04-25T00:00:00Z',
+  individualCount: 5,
+  embeddingDim: 2152,
+  embeddingModelVersion: '4.1.0',
+  detectorModelFile: '/packs/horse/detector.onnx',
+  embeddingsFile: '/packs/horse/embeddings.bin',
+  indexFile: '/packs/horse/index.json',
+  referencePhotosDir: '/packs/horse/photos',
+  packDir: '/packs/horse',
+  downloadedAt: '2026-04-25T12:00:00Z',
+  sizeBytes: 9_000_000,
+  ...overrides,
+});
+
 const MOCK_PIPELINE_RESULT = {
   observationId: 'obs-123',
   photoUri: 'file:///mock/camera.jpg',
@@ -95,7 +115,15 @@ describe('CaptureScreen', () => {
     useWildlifeStore.setState({
       packs: [],
       observations: [],
-      miewidModelPath: '/mock/miewid.onnx',
+      miewidModel: {
+        path: '/mock/miewid.onnx',
+        name: 'miewid',
+        version: '4.1.0',
+        sha256: 'abc123',
+        sizeBytes: 1000,
+        status: 'ready',
+        verifiedAt: '2026-08-01T00:00:00.000Z',
+      },
     });
     mockProcessPhoto.mockResolvedValue(MOCK_PIPELINE_RESULT);
     mockLaunchCamera.mockResolvedValue({
@@ -226,6 +254,69 @@ describe('CaptureScreen', () => {
     // GPS saved in observation (pipeline no longer receives GPS)
     const observations = useWildlifeStore.getState().observations;
     expect(observations[0].gps).toBeNull();
+  });
+
+  // ==========================================================================
+  // MiewID model gate
+  // ==========================================================================
+
+  it('blocks capture when no MiewID model record exists', async () => {
+    useWildlifeStore.setState({ miewidModel: null });
+
+    const { getByTestId } = render(<CaptureScreen />);
+    fireEvent.press(getByTestId('take-photo-button'));
+
+    await waitFor(() => {
+      expect(Alert.alert).toHaveBeenCalledWith(
+        'MiewID model not ready',
+        expect.any(String),
+      );
+    });
+    expect(wildlifePipeline.processPhoto).not.toHaveBeenCalled();
+  });
+
+  it('blocks capture when the MiewID model is corrupt', async () => {
+    useWildlifeStore.setState({
+      miewidModel: {
+        path: '/mock/miewid.onnx',
+        name: 'miewid',
+        version: '4.1.0',
+        sha256: 'abc123',
+        sizeBytes: 1000,
+        status: 'corrupt',
+        verifiedAt: null,
+      },
+    });
+
+    const { getByTestId } = render(<CaptureScreen />);
+    fireEvent.press(getByTestId('take-photo-button'));
+
+    await waitFor(() => {
+      expect(Alert.alert).toHaveBeenCalledWith(
+        'MiewID model not ready',
+        expect.stringContaining('corrupt'),
+      );
+    });
+    expect(wildlifePipeline.processPhoto).not.toHaveBeenCalled();
+  });
+
+  it('excludes packs with an incompatible embedding model version', async () => {
+    useWildlifeStore.setState({
+      packs: [
+        makeTestPack({ id: 'pack-compatible', embeddingModelVersion: '4.1.0' }),
+        makeTestPack({ id: 'pack-incompatible', embeddingModelVersion: '1.0.0' }),
+      ],
+    });
+
+    const { getByTestId } = render(<CaptureScreen />);
+    fireEvent.press(getByTestId('take-photo-button'));
+
+    await waitFor(() => {
+      expect(wildlifePipeline.processPhoto).toHaveBeenCalled();
+    });
+    const call = (wildlifePipeline.processPhoto as jest.Mock).mock.calls[0][0];
+    expect(call.speciesConfigs).toHaveLength(1);
+    expect(call.speciesConfigs[0].packId).toBe('pack-compatible');
   });
 
   // ==========================================================================

@@ -6,12 +6,14 @@
  * Priority: P1 - Core wildlife re-ID functionality.
  */
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useWildlifeStore } from '../../../src/stores/wildlifeStore';
 import type {
   EmbeddingPack,
   Observation,
   Detection,
   LocalIndividual,
+  MiewIDModelRecord,
   SyncQueueItem,
 } from '../../../src/types';
 
@@ -408,24 +410,122 @@ describe('wildlifeStore', () => {
   });
 
   // ========================================================================
-  // MiewID Model Path
+  // MiewID Model Record
   // ========================================================================
-  describe('miewidModelPath', () => {
+  describe('miewidModel', () => {
+    const makeModelRecord = (
+      overrides: Partial<MiewIDModelRecord> = {},
+    ): MiewIDModelRecord => ({
+      path: '/models/miewid-4.1.0.onnx',
+      name: 'miewid',
+      version: '4.1.0',
+      sha256: 'abc123',
+      sizeBytes: 103_859_027,
+      status: 'ready',
+      verifiedAt: '2026-08-01T00:00:00.000Z',
+      ...overrides,
+    });
+
     it('starts as null', () => {
-      expect(useWildlifeStore.getState().miewidModelPath).toBeNull();
+      expect(useWildlifeStore.getState().miewidModel).toBeNull();
     });
 
-    it('setMiewidModelPath sets the path', () => {
-      useWildlifeStore.getState().setMiewidModelPath('/models/miewid.onnx');
+    it('setMiewidModel stores a full record', () => {
+      const record = makeModelRecord();
 
-      expect(useWildlifeStore.getState().miewidModelPath).toBe('/models/miewid.onnx');
+      useWildlifeStore.getState().setMiewidModel(record);
+
+      expect(useWildlifeStore.getState().miewidModel).toEqual(record);
     });
 
-    it('setMiewidModelPath can set back to null', () => {
-      useWildlifeStore.getState().setMiewidModelPath('/models/miewid.onnx');
-      useWildlifeStore.getState().setMiewidModelPath(null);
+    it('setMiewidModel can clear the record', () => {
+      useWildlifeStore.getState().setMiewidModel(makeModelRecord());
+      useWildlifeStore.getState().setMiewidModel(null);
 
-      expect(useWildlifeStore.getState().miewidModelPath).toBeNull();
+      expect(useWildlifeStore.getState().miewidModel).toBeNull();
+    });
+
+    it('updateMiewidModelStatus updates only the status', () => {
+      const record = makeModelRecord({ status: 'missing' });
+      useWildlifeStore.getState().setMiewidModel(record);
+
+      useWildlifeStore.getState().updateMiewidModelStatus('downloading');
+
+      const updated = useWildlifeStore.getState().miewidModel;
+      expect(updated?.status).toBe('downloading');
+      expect(updated?.path).toBe(record.path);
+      expect(updated?.sha256).toBe(record.sha256);
+    });
+
+    it('updateMiewidModelStatus is a no-op when no record exists', () => {
+      useWildlifeStore.getState().updateMiewidModelStatus('ready');
+
+      expect(useWildlifeStore.getState().miewidModel).toBeNull();
+    });
+  });
+
+  // ========================================================================
+  // Persist migration (version 0 → 1)
+  // ========================================================================
+  describe('persist migration', () => {
+    it('migrates a legacy miewidModelPath string into a model record', async () => {
+      await AsyncStorage.setItem(
+        'wildlife-store',
+        JSON.stringify({
+          state: { miewidModelPath: '/old/models/miewid.onnx' },
+          version: 0,
+        }),
+      );
+
+      await useWildlifeStore.persist.rehydrate();
+
+      const state = useWildlifeStore.getState();
+      expect(state.miewidModel).toEqual({
+        path: '/old/models/miewid.onnx',
+        name: 'miewid',
+        version: 'unknown',
+        sha256: null,
+        sizeBytes: null,
+        status: 'missing',
+        verifiedAt: null,
+      });
+      expect(
+        (state as unknown as { miewidModelPath?: unknown }).miewidModelPath,
+      ).toBeUndefined();
+    });
+
+    it('migrates a legacy null miewidModelPath to a null record', async () => {
+      await AsyncStorage.setItem(
+        'wildlife-store',
+        JSON.stringify({
+          state: { miewidModelPath: null },
+          version: 0,
+        }),
+      );
+
+      await useWildlifeStore.persist.rehydrate();
+
+      expect(useWildlifeStore.getState().miewidModel).toBeNull();
+    });
+
+    it('rehydrates a current-version record unchanged', async () => {
+      const record = {
+        path: '/models/miewid-4.1.0.onnx',
+        name: 'miewid',
+        version: '4.1.0',
+        sha256: 'abc123',
+        sizeBytes: 103_859_027,
+        status: 'ready',
+        verifiedAt: '2026-08-01T00:00:00.000Z',
+      };
+      await AsyncStorage.setItem(
+        'wildlife-store',
+        JSON.stringify({ state: { miewidModel: record }, version: 1 }),
+      );
+
+      await useWildlifeStore.persist.rehydrate();
+
+      expect(useWildlifeStore.getState().miewidModel).toEqual(record);
     });
   });
 
@@ -439,7 +539,15 @@ describe('wildlifeStore', () => {
       useWildlifeStore.getState().addObservation(makeObservation());
       useWildlifeStore.getState().addLocalIndividual(makeLocalIndividual());
       useWildlifeStore.getState().addToSyncQueue(makeSyncQueueItem());
-      useWildlifeStore.getState().setMiewidModelPath('/models/miewid.onnx');
+      useWildlifeStore.getState().setMiewidModel({
+        path: '/models/miewid.onnx',
+        name: 'miewid',
+        version: '4.1.0',
+        sha256: 'abc123',
+        sizeBytes: 1000,
+        status: 'ready',
+        verifiedAt: '2026-08-01T00:00:00.000Z',
+      });
       useWildlifeStore.getState().getNextFieldId(); // bumps counter to 2
 
       useWildlifeStore.getState().reset();
@@ -449,7 +557,7 @@ describe('wildlifeStore', () => {
       expect(state.observations).toEqual([]);
       expect(state.localIndividuals).toEqual([]);
       expect(state.syncQueue).toEqual([]);
-      expect(state.miewidModelPath).toBeNull();
+      expect(state.miewidModel).toBeNull();
       expect(state.nextFieldId).toBe(1);
     });
   });
