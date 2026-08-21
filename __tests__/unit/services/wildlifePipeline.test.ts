@@ -389,6 +389,47 @@ describe('WildlifePipeline', () => {
     expect(mockRunDetection).not.toHaveBeenCalled();
   });
 
+  it("should use the species config's embedding input settings when provided", async () => {
+    mockRunDetection.mockResolvedValueOnce({
+      results: [
+        {
+          boundingBox: { x: 0.1, y: 0.2, width: 0.3, height: 0.4 },
+          species: 'zebra_plains',
+          confidence: 0.9,
+        },
+      ],
+      inferenceTimeMs: 100,
+    });
+    mockExtractEmbedding.mockResolvedValueOnce({
+      embedding: [0.1, 0.2, 0.3],
+      inferenceTimeMs: 50,
+    });
+    mockMatchEmbedding.mockReturnValue([]);
+
+    await wildlifePipeline.processPhoto({
+      photoUri: 'file:///photos/test.jpg',
+      speciesConfigs: [
+        makeSpeciesConfig({
+          embeddingInputSize: [416, 416],
+          embeddingNormalize: {
+            mean: [0.5, 0.5, 0.5],
+            std: [0.25, 0.25, 0.25],
+          },
+        }),
+      ],
+      miewidModelPath: '/models/miewid.onnx',
+    });
+
+    expect(mockExtractEmbedding).toHaveBeenCalledWith(
+      expect.any(String),
+      '/models/miewid.onnx',
+      {
+        inputSize: [416, 416],
+        normalize: { mean: [0.5, 0.5, 0.5], std: [0.25, 0.25, 0.25] },
+      },
+    );
+  });
+
   it('should return an empty errors array on full success', async () => {
     mockRunDetection.mockResolvedValueOnce({
       results: [
