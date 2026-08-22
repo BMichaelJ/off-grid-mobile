@@ -45,7 +45,7 @@ const isCount = (value: unknown): boolean =>
 const isNumberTuple = (value: unknown, length: number): boolean =>
   Array.isArray(value) &&
   value.length === length &&
-  value.every((v) => typeof v === 'number');
+  value.every(v => typeof v === 'number');
 
 const getPath = (obj: unknown, path: string[]): unknown =>
   path.reduce<unknown>(
@@ -73,21 +73,21 @@ const MANIFEST_SCHEMA_CHECKS: Array<{
   { path: ['embeddingCount'], check: isCount },
   {
     path: ['embeddingDim'],
-    check: (v) => typeof v === 'number' && v > 0,
+    check: v => typeof v === 'number' && v > 0,
   },
   { path: ['embeddingModel', 'name'], check: isNonEmptyString },
   { path: ['embeddingModel', 'version'], check: isNonEmptyString },
   {
     path: ['embeddingModel', 'inputSize'],
-    check: (v) => isNumberTuple(v, 2),
+    check: v => isNumberTuple(v, 2),
   },
   {
     path: ['embeddingModel', 'normalize', 'mean'],
-    check: (v) => isNumberTuple(v, 3),
+    check: v => isNumberTuple(v, 3),
   },
   {
     path: ['embeddingModel', 'normalize', 'std'],
-    check: (v) => isNumberTuple(v, 3),
+    check: v => isNumberTuple(v, 3),
   },
   { path: ['detectorModel', 'filename'], check: isNonEmptyString },
   { path: ['detectorModel', 'configFile'], check: isNonEmptyString },
@@ -105,7 +105,7 @@ function findManifestSchemaErrors(manifest: unknown): string[] {
  * filenames whose location follows the pack layout convention
  * (embeddings/, models/, config/); explicit relative paths pass through.
  */
-async function resolvePackFile(
+export async function resolvePackFile(
   packDir: string,
   name: string,
 ): Promise<string | null> {
@@ -170,7 +170,7 @@ async function loadManifestChecked(
   const schemaErrors = findManifestSchemaErrors(manifest);
   if (schemaErrors.length > 0) {
     return {
-      errors: schemaErrors.map((detail) => ({
+      errors: schemaErrors.map(detail => ({
         code: 'manifest-schema' as const,
         detail,
       })),
@@ -251,7 +251,10 @@ async function checkIndex(
   }
 
   if (!Array.isArray(parsed.individuals)) {
-    collector.push('index-unparseable', "index.json has no 'individuals' array");
+    collector.push(
+      'index-unparseable',
+      "index.json has no 'individuals' array",
+    );
     return [];
   }
 
@@ -286,7 +289,9 @@ export async function validatePack(
   if (!SUPPORTED_FORMAT_MAJOR_VERSIONS.includes(formatMajor)) {
     collector.push(
       'unsupported-format-version',
-      `formatVersion ${manifest.formatVersion} (supported majors: ${SUPPORTED_FORMAT_MAJOR_VERSIONS.join(', ')})`,
+      `formatVersion ${
+        manifest.formatVersion
+      } (supported majors: ${SUPPORTED_FORMAT_MAJOR_VERSIONS.join(', ')})`,
     );
   }
 

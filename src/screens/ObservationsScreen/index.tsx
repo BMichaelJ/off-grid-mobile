@@ -10,6 +10,7 @@ import { useThemedStyles } from '../../theme/useThemedStyles';
 import { useWildlifeStore } from '../../stores/wildlifeStore';
 import type { RootStackParamList } from '../../navigation/types';
 import type { Observation, SyncQueueItem } from '../../types/wildlife';
+import { toDisplayUri } from '../../utils/imageUri';
 import { createStyles } from './styles';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -47,7 +48,7 @@ function getReviewStatusText(observation: Observation): string {
     return 'No detections';
   }
   const reviewed = observation.detections.filter(
-    (d) => d.matchResult.reviewStatus !== 'pending',
+    d => d.matchResult.reviewStatus !== 'pending',
   ).length;
   if (reviewed === total) {
     return 'All reviewed';
@@ -57,16 +58,14 @@ function getReviewStatusText(observation: Observation): string {
 
 function isPendingReview(observation: Observation): boolean {
   return observation.detections.some(
-    (d) => d.matchResult.reviewStatus === 'pending',
+    d => d.matchResult.reviewStatus === 'pending',
   );
 }
 
 function isAllReviewed(observation: Observation): boolean {
   return (
     observation.detections.length > 0 &&
-    observation.detections.every(
-      (d) => d.matchResult.reviewStatus !== 'pending',
-    )
+    observation.detections.every(d => d.matchResult.reviewStatus !== 'pending')
   );
 }
 
@@ -74,7 +73,7 @@ function isSynced(
   observation: Observation,
   syncQueue: SyncQueueItem[],
 ): boolean {
-  const item = syncQueue.find((s) => s.observationId === observation.id);
+  const item = syncQueue.find(s => s.observationId === observation.id);
   return item?.status === 'synced';
 }
 
@@ -89,7 +88,7 @@ function filterObservations(
     case 'reviewed':
       return observations.filter(isAllReviewed);
     case 'synced':
-      return observations.filter((obs) => isSynced(obs, syncQueue));
+      return observations.filter(obs => isSynced(obs, syncQueue));
     default:
       return observations;
   }
@@ -100,8 +99,8 @@ export const ObservationsScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
 
-  const observations = useWildlifeStore((s) => s.observations);
-  const syncQueue = useWildlifeStore((s) => s.syncQueue);
+  const observations = useWildlifeStore(s => s.observations);
+  const syncQueue = useWildlifeStore(s => s.syncQueue);
 
   const filtered = useMemo(
     () => filterObservations(observations, syncQueue, activeFilter),
@@ -125,7 +124,7 @@ export const ObservationsScreen: React.FC = () => {
         <Card>
           <View style={styles.row}>
             <Image
-              source={{ uri: item.photoUri }}
+              source={{ uri: toDisplayUri(item.photoUri) }}
               style={styles.thumbnail}
               testID={`observation-thumbnail-${index}`}
             />
@@ -140,7 +139,11 @@ export const ObservationsScreen: React.FC = () => {
                 {getReviewStatusText(item)}
               </Text>
             </View>
-            <Icon name="chevron-right" size={18} color={styles.reviewStatus.color} />
+            <Icon
+              name="chevron-right"
+              size={18}
+              color={styles.reviewStatus.color}
+            />
           </View>
         </Card>
       </AnimatedListItem>
@@ -151,13 +154,17 @@ export const ObservationsScreen: React.FC = () => {
   const keyExtractor = useCallback((item: Observation) => item.id, []);
 
   return (
-    <SafeAreaView style={styles.container} testID="observations-screen" edges={['top']}>
+    <SafeAreaView
+      style={styles.container}
+      testID="observations-screen"
+      edges={['top']}
+    >
       <View style={styles.header}>
         <Text style={styles.title}>Observations</Text>
       </View>
 
       <View style={styles.filterBar} testID="filter-bar">
-        {FILTERS.map((f) => (
+        {FILTERS.map(f => (
           <TouchableOpacity
             key={f.key}
             style={[

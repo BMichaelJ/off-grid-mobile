@@ -3,6 +3,7 @@ import { View, Text, Image, TouchableOpacity } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../../theme';
 import type { MatchCandidate } from '../../types';
+import { toDisplayUri } from '../../utils/imageUri';
 import type { createStyles } from './styles';
 
 interface CandidateCardProps {
@@ -26,10 +27,13 @@ export const CandidateCard: React.FC<CandidateCardProps> = ({
   const scorePercent = `${Math.round(candidate.score * 100)}%`;
 
   return (
-    <View style={styles.candidateCard} testID={`candidate-${candidate.individualId}`}>
+    <View
+      style={styles.candidateCard}
+      testID={`candidate-${candidate.individualId}`}
+    >
       {refPhotoUri ? (
         <Image
-          source={{ uri: refPhotoUri }}
+          source={{ uri: toDisplayUri(refPhotoUri) }}
           style={styles.candidatePhoto}
           testID={`candidate-photo-${candidate.individualId}`}
         />

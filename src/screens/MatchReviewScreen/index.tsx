@@ -9,6 +9,7 @@ import { useThemedStyles, useTheme } from '../../theme';
 import { useWildlifeStore } from '../../stores';
 import type { RootStackParamList } from '../../navigation/types';
 import type { MatchCandidate } from '../../types';
+import { toDisplayUri } from '../../utils/imageUri';
 import { CandidateCard } from './CandidateCard';
 import { createStyles } from './styles';
 
@@ -32,28 +33,28 @@ export const MatchReviewScreen: React.FC = () => {
   const route = useRoute<MatchReviewRouteProp>();
   const { observationId, detectionId } = route.params;
 
-  const observation = useWildlifeStore((s) =>
-    s.observations.find((o) => o.id === observationId),
+  const observation = useWildlifeStore(s =>
+    s.observations.find(o => o.id === observationId),
   );
-  const localIndividuals = useWildlifeStore((s) => s.localIndividuals);
-  const updateDetection = useWildlifeStore((s) => s.updateDetection);
-  const addLocalIndividual = useWildlifeStore((s) => s.addLocalIndividual);
+  const localIndividuals = useWildlifeStore(s => s.localIndividuals);
+  const updateDetection = useWildlifeStore(s => s.updateDetection);
+  const addLocalIndividual = useWildlifeStore(s => s.addLocalIndividual);
   const addEmbeddingToLocalIndividual = useWildlifeStore(
-    (s) => s.addEmbeddingToLocalIndividual,
+    s => s.addEmbeddingToLocalIndividual,
   );
 
   const detection = useMemo(
-    () => observation?.detections.find((d) => d.id === detectionId) ?? null,
+    () => observation?.detections.find(d => d.id === detectionId) ?? null,
     [observation, detectionId],
   );
 
   const candidates = detection?.matchResult.topCandidates ?? [];
 
   const resolvedCandidates: ResolvedCandidate[] = useMemo(() => {
-    return candidates.map((candidate) => {
+    return candidates.map(candidate => {
       if (candidate.source === 'local') {
         const local = localIndividuals.find(
-          (ind) => ind.localId === candidate.individualId,
+          ind => ind.localId === candidate.individualId,
         );
         return {
           candidate,
@@ -82,7 +83,7 @@ export const MatchReviewScreen: React.FC = () => {
   const handleApprove = useCallback(
     (individualId: string) => {
       const approvedCandidate = candidates.find(
-        (c) => c.individualId === individualId,
+        c => c.individualId === individualId,
       );
       if (approvedCandidate?.source === 'local' && detection) {
         addEmbeddingToLocalIndividual(
@@ -216,7 +217,7 @@ export const MatchReviewScreen: React.FC = () => {
 
       <View style={styles.detectionSection}>
         <Image
-          source={{ uri: detection.croppedImageUri }}
+          source={{ uri: toDisplayUri(detection.croppedImageUri) }}
           style={styles.croppedImage}
           resizeMode="cover"
           testID="cropped-detection-image"

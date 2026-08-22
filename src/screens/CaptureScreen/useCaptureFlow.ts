@@ -6,12 +6,19 @@ import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { wildlifePipeline } from '../../services/wildlifePipeline';
 import { buildEmbeddingDatabase } from '../../services/embeddingDatabaseBuilder';
-import { persistObservationFiles, deleteObservationFiles } from '../../services/observationStorage';
+import {
+  persistObservationFiles,
+  deleteObservationFiles,
+} from '../../services/observationStorage';
 import { useWildlifeStore } from '../../stores/wildlifeStore';
 import { packManager } from '../../services/packManager';
 import { checkEmbeddingModelCompatibility } from '../../services/miewidModelManager';
 import type { SpeciesConfig } from '../../services/wildlifePipeline/types';
-import type { DetectorConfig, EmbeddingPackManifest, MiewIDModelStatus } from '../../types';
+import type {
+  DetectorConfig,
+  EmbeddingPackManifest,
+  MiewIDModelStatus,
+} from '../../types';
 import type { RootStackParamList } from '../../navigation/types';
 import logger from '../../utils/logger';
 
@@ -100,16 +107,16 @@ async function getDeviceLocation(): Promise<{
       }
     }
 
-    return await new Promise((resolve) => {
+    return await new Promise(resolve => {
       Geolocation.getCurrentPosition(
-        (position) => {
+        position => {
           resolve({
             lat: position.coords.latitude,
             lon: position.coords.longitude,
             accuracy: position.coords.accuracy,
           });
         },
-        (error) => {
+        error => {
           logger.warn(
             `[CaptureFlow] Unable to get device location: ${error.message}`,
           );
@@ -138,13 +145,16 @@ function getDeviceInfo(): { model: string; os: string } {
 }
 
 /** Human-readable explanation for each non-ready model status. */
-const MODEL_STATUS_MESSAGES: Record<Exclude<MiewIDModelStatus, 'ready'>, string> = {
+const MODEL_STATUS_MESSAGES: Record<
+  Exclude<MiewIDModelStatus, 'ready'>,
+  string
+> = {
   missing:
-    'The MiewID embedding model is not installed on this device. Download it from Settings before capturing.',
+    'The MiewID embedding model is not installed on this device. Download it from the Packs screen before capturing.',
   downloading:
     'The MiewID embedding model is still downloading. Try again once the download completes.',
   corrupt:
-    'The installed MiewID embedding model file is corrupt. Re-download it from Settings.',
+    'The installed MiewID embedding model file is corrupt. Re-download it from the Packs screen.',
   incompatible:
     'The installed MiewID embedding model is incompatible with the loaded packs. Update the model or packs.',
 };
@@ -152,8 +162,8 @@ const MODEL_STATUS_MESSAGES: Record<Exclude<MiewIDModelStatus, 'ready'>, string>
 export function useCaptureFlow() {
   const [isProcessing, setIsProcessing] = useState(false);
   const navigation = useNavigation<NavigationProp>();
-  const packs = useWildlifeStore((s) => s.packs);
-  const miewidModel = useWildlifeStore((s) => s.miewidModel);
+  const packs = useWildlifeStore(s => s.packs);
+  const miewidModel = useWildlifeStore(s => s.miewidModel);
 
   const processPhoto = useCallback(
     async (photoUri: string) => {
@@ -171,11 +181,13 @@ export function useCaptureFlow() {
       try {
         // Quarantined packs failed integrity validation — their embeddings
         // or index cannot be trusted until re-validated.
-        const healthyPacks = packs.filter((pack) => pack.status !== 'quarantined');
+        const healthyPacks = packs.filter(
+          pack => pack.status !== 'quarantined',
+        );
 
         // Exclude packs whose embeddings live in a different model space —
         // matching across major MiewID versions produces meaningless scores.
-        const compatiblePacks = healthyPacks.filter((pack) => {
+        const compatiblePacks = healthyPacks.filter(pack => {
           const compatibility = checkEmbeddingModelCompatibility(
             miewidModel.version,
             pack.embeddingModelVersion,
@@ -211,14 +223,17 @@ export function useCaptureFlow() {
 
         const { localIndividuals } = useWildlifeStore.getState();
         const speciesConfigs: SpeciesConfig[] = await Promise.all(
-          Array.from(groups.values()).map(async (groupPacks) => {
+          Array.from(groups.values()).map(async groupPacks => {
             const primary = groupPacks[0];
             const manifest = await loadManifestSafe(primary.packDir);
             return {
               packId: primary.id,
               species: primary.species,
               detectorModelPath: primary.detectorModelFile,
-              detectorConfig: await loadDetectorConfig(primary.packDir, manifest),
+              detectorConfig: await loadDetectorConfig(
+                primary.packDir,
+                manifest,
+              ),
               embeddingDatabase: await buildEmbeddingDatabase(
                 primary.species,
                 groupPacks,
@@ -244,7 +259,7 @@ export function useCaptureFlow() {
           Alert.alert(
             'Detection Failed',
             result.errors
-              .map((e) => (e.species ? `${e.species}: ${e.message}` : e.message))
+              .map(e => (e.species ? `${e.species}: ${e.message}` : e.message))
               .join('\n'),
           );
           return;
@@ -289,7 +304,7 @@ export function useCaptureFlow() {
           Alert.alert(
             'Some detections failed',
             result.errors
-              .map((e) => (e.species ? `${e.species}: ${e.message}` : e.message))
+              .map(e => (e.species ? `${e.species}: ${e.message}` : e.message))
               .join('\n'),
           );
         }

@@ -8,6 +8,7 @@ import type { RouteProp } from '@react-navigation/native';
 import { useThemedStyles, useTheme } from '../../theme';
 import { useWildlifeStore } from '../../stores';
 import type { RootStackParamList } from '../../navigation/types';
+import { toDisplayUri } from '../../utils/imageUri';
 import { BoundingBoxOverlay } from './BoundingBoxOverlay';
 import { createStyles } from './styles';
 
@@ -37,8 +38,8 @@ export const DetectionResultsScreen: React.FC = () => {
   const route = useRoute<DetectionResultsRouteProp>();
   const { observationId } = route.params;
 
-  const observation = useWildlifeStore((s) =>
-    s.observations.find((o) => o.id === observationId),
+  const observation = useWildlifeStore(s =>
+    s.observations.find(o => o.id === observationId),
   );
 
   const detections = observation?.detections ?? [];
@@ -81,14 +82,14 @@ export const DetectionResultsScreen: React.FC = () => {
       <View style={styles.photoContainer}>
         {observation?.photoUri ? (
           <Image
-            source={{ uri: observation.photoUri }}
+            source={{ uri: toDisplayUri(observation.photoUri) }}
             style={styles.photo}
             resizeMode="contain"
             testID="observation-photo"
           />
         ) : null}
         <View style={styles.overlayContainer}>
-          {detections.map((detection) => (
+          {detections.map(detection => (
             <BoundingBoxOverlay
               key={detection.id}
               detection={detection}
