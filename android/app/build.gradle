@@ -78,9 +78,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "ai.offgridmobile"
+    namespace "org.ganesha.elebook"
     defaultConfig {
-        applicationId "ai.offgridmobile"
+        applicationId "org.ganesha.elebook"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1771958439
@@ -95,11 +95,11 @@ android {
             keyPassword 'android'
         }
         release {
-            if (project.hasProperty('OFFGRID_UPLOAD_STORE_FILE')) {
-                storeFile file(OFFGRID_UPLOAD_STORE_FILE)
-                storePassword OFFGRID_UPLOAD_STORE_PASSWORD
-                keyAlias OFFGRID_UPLOAD_KEY_ALIAS
-                keyPassword OFFGRID_UPLOAD_KEY_PASSWORD
+            if (project.hasProperty('ELEBOOK_RELEASE_STORE_FILE')) {
+                storeFile file(ELEBOOK_RELEASE_STORE_FILE)
+                storePassword ELEBOOK_RELEASE_STORE_PASSWORD
+                keyAlias ELEBOOK_RELEASE_KEY_ALIAS
+                keyPassword ELEBOOK_RELEASE_KEY_PASSWORD
             }
         }
     }
