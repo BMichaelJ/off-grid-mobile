@@ -3,7 +3,7 @@
   "version": "0.0.58",
   "private": true,
   "scripts": {
-    "android": "react-native run-android --mode=debug --appId ai.offgridmobile.dev",
+    "android": "react-native run-android --mode=debug --appId org.ganesha.elebook.dev",
     "ios": "react-native run-ios",
     "lint": "eslint . && npm run lint:android && npm run lint:ios",
     "lint:android": "cd android && ./gradlew :app:lintDebug",
