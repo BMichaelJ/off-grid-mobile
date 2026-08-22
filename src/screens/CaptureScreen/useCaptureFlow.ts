@@ -5,6 +5,7 @@ import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { wildlifePipeline } from '../../services/wildlifePipeline';
 import { buildEmbeddingDatabase } from '../../services/embeddingDatabaseBuilder';
+import { persistObservationFiles, deleteObservationFiles } from '../../services/observationStorage';
 import { useWildlifeStore } from '../../stores/wildlifeStore';
 import { packManager } from '../../services/packManager';
 import { checkEmbeddingModelCompatibility } from '../../services/miewidModelManager';
@@ -210,17 +211,34 @@ export function useCaptureFlow() {
           return;
         }
 
-        // Save observation to store
-        useWildlifeStore.getState().addObservation({
-          id: result.observationId,
-          photoUri: result.photoUri,
-          gps,
-          timestamp: new Date().toISOString(),
-          deviceInfo,
-          fieldNotes: null,
-          detections: result.detections,
-          createdAt: new Date().toISOString(),
-        });
+        // Move the photo and its crops out of ephemeral cache storage into a
+        // durable, app-private location before the observation is saved --
+        // a file left in the cache directory can be evicted at any time.
+        const persisted = await persistObservationFiles(
+          result.observationId,
+          result.photoUri,
+          result.detections,
+        );
+
+        // Save observation to store -- awaited so the durable SQLite write
+        // actually commits before we tell the user it's saved. If the DB
+        // write fails after the files were already moved, clean them up
+        // rather than leaving an orphaned, unreferenced directory behind.
+        try {
+          await useWildlifeStore.getState().addObservation({
+            id: result.observationId,
+            photoUri: persisted.photoUri,
+            gps,
+            timestamp: new Date().toISOString(),
+            deviceInfo,
+            fieldNotes: null,
+            detections: persisted.detections,
+            createdAt: new Date().toISOString(),
+          });
+        } catch (saveError) {
+          await deleteObservationFiles(result.observationId);
+          throw saveError;
+        }
 
         navigation.navigate('DetectionResults', {
           observationId: result.observationId,

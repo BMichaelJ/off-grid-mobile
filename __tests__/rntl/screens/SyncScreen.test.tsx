@@ -15,6 +15,7 @@ import React from 'react';
 import { Alert } from 'react-native';
 import { render, fireEvent } from '@testing-library/react-native';
 import { useWildlifeStore } from '../../../src/stores/wildlifeStore';
+import { initDatabase } from '../../../src/services/database';
 import type { SyncQueueItem } from '../../../src/types/wildlife';
 
 // ---------------------------------------------------------------------------
@@ -78,6 +79,10 @@ const createSyncItem = (
 // ---------------------------------------------------------------------------
 
 describe('SyncScreen', () => {
+  beforeAll(async () => {
+    await initDatabase();
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     useWildlifeStore.setState({ syncQueue: [] });

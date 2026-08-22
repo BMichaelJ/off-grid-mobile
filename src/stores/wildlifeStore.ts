@@ -10,10 +10,30 @@ import type {
   MiewIDModelStatus,
   SyncQueueItem,
 } from '../types';
+import {
+  insertObservationWithDetections,
+  updateDetectionFields,
+  upsertSyncQueueItem,
+  updateSyncQueueFields,
+  listObservationsWithDetections,
+  listSyncQueue,
+  clearAllObservationData,
+} from '../services/database';
+import logger from '../utils/logger';
 
 // ---------------------------------------------------------------------------
 // State shape
 // ---------------------------------------------------------------------------
+//
+// `observations` and `syncQueue` are durably persisted in SQLite (see
+// services/database), not in this store's AsyncStorage-backed `persist`
+// blob -- every write below updates in-memory state synchronously (so
+// existing synchronous call sites and selectors keep working unchanged) AND
+// returns a promise that resolves once the SQLite write actually commits,
+// for the one call site (capture flow) that needs to know a save is durable
+// before telling the user it's safe. `packs`, `localIndividuals`,
+// `miewidModel`, and `nextFieldId` are unaffected by this migration --
+// small, non-relational, and fine as a persisted JSON blob.
 
 interface WildlifeState {
   // Data slices
@@ -29,13 +49,13 @@ interface WildlifeState {
   removePack: (packId: string) => void;
   setPacks: (packs: EmbeddingPack[]) => void;
 
-  // Observation actions
-  addObservation: (observation: Observation) => void;
+  // Observation actions (durably persisted to SQLite -- see above)
+  addObservation: (observation: Observation) => Promise<void>;
   updateDetection: (
     observationId: string,
     detectionId: string,
     updates: Partial<Detection>,
-  ) => void;
+  ) => Promise<void>;
 
   // Local individual actions
   addLocalIndividual: (individual: LocalIndividual) => void;
@@ -48,12 +68,12 @@ interface WildlifeState {
   // Field ID generator
   getNextFieldId: () => string;
 
-  // Sync queue actions
-  addToSyncQueue: (item: SyncQueueItem) => void;
+  // Sync queue actions (durably persisted to SQLite -- see above)
+  addToSyncQueue: (item: SyncQueueItem) => Promise<void>;
   updateSyncStatus: (
     observationId: string,
     updates: Partial<SyncQueueItem>,
-  ) => void;
+  ) => Promise<void>;
 
   // MiewID model record
   setMiewidModel: (record: MiewIDModelRecord | null) => void;
@@ -102,12 +122,21 @@ export const useWildlifeStore = create<WildlifeState>()(
       setPacks: (packs) => set({ packs }),
 
       // ---- Observation actions --------------------------------------------
-      addObservation: (observation) =>
+      addObservation: (observation) => {
         set((state) => ({
           observations: [...state.observations, observation],
-        })),
+        }));
+        return insertObservationWithDetections(observation).catch((error) => {
+          logger.error('[wildlifeStore] Failed to persist observation to SQLite -- rolling back in-memory state:', error);
+          set((state) => ({
+            observations: state.observations.filter((obs) => obs.id !== observation.id),
+          }));
+          throw error;
+        });
+      },
 
-      updateDetection: (observationId, detectionId, updates) =>
+      updateDetection: (observationId, detectionId, updates) => {
+        const previousObservation = get().observations.find((obs) => obs.id === observationId);
         set((state) => ({
           observations: state.observations.map((obs) =>
             obs.id === observationId
@@ -119,7 +148,19 @@ export const useWildlifeStore = create<WildlifeState>()(
                 }
               : obs,
           ),
-        })),
+        }));
+        return updateDetectionFields(observationId, detectionId, updates).catch((error) => {
+          logger.error('[wildlifeStore] Failed to persist detection update to SQLite -- rolling back in-memory state:', error);
+          if (previousObservation) {
+            set((state) => ({
+              observations: state.observations.map((obs) =>
+                obs.id === observationId ? previousObservation : obs,
+              ),
+            }));
+          }
+          throw error;
+        });
+      },
 
       // ---- Local individual actions ---------------------------------------
       addLocalIndividual: (individual) =>
@@ -150,19 +191,40 @@ export const useWildlifeStore = create<WildlifeState>()(
       },
 
       // ---- Sync queue actions ---------------------------------------------
-      addToSyncQueue: (item) =>
+      addToSyncQueue: (item) => {
         set((state) => ({
           syncQueue: [...state.syncQueue, item],
-        })),
+        }));
+        return upsertSyncQueueItem(item).catch((error) => {
+          logger.error('[wildlifeStore] Failed to persist sync queue item to SQLite -- rolling back in-memory state:', error);
+          set((state) => ({
+            syncQueue: state.syncQueue.filter((i) => i.observationId !== item.observationId),
+          }));
+          throw error;
+        });
+      },
 
-      updateSyncStatus: (observationId, updates) =>
+      updateSyncStatus: (observationId, updates) => {
+        const previousItem = get().syncQueue.find((item) => item.observationId === observationId);
         set((state) => ({
           syncQueue: state.syncQueue.map((item) =>
             item.observationId === observationId
               ? { ...item, ...updates }
               : item,
           ),
-        })),
+        }));
+        return updateSyncQueueFields(observationId, updates).catch((error) => {
+          logger.error('[wildlifeStore] Failed to persist sync status to SQLite -- rolling back in-memory state:', error);
+          if (previousItem) {
+            set((state) => ({
+              syncQueue: state.syncQueue.map((item) =>
+                item.observationId === observationId ? previousItem : item,
+              ),
+            }));
+          }
+          throw error;
+        });
+      },
 
       // ---- MiewID model record ---------------------------------------------
       setMiewidModel: (record) => set({ miewidModel: record }),
@@ -174,8 +236,13 @@ export const useWildlifeStore = create<WildlifeState>()(
             : {},
         ),
 
-      // ---- Reset ----------------------------------------------------------
-      reset: () => set({ ...INITIAL_STATE }),
+      // ---- Reset ------------------------------------------------------------
+      reset: () => {
+        set({ ...INITIAL_STATE });
+        clearAllObservationData().catch((error) => {
+          logger.error('[wildlifeStore] Failed to clear SQLite observation data on reset:', error);
+        });
+      },
     }),
     {
       name: 'wildlife-store',
@@ -203,14 +270,27 @@ export const useWildlifeStore = create<WildlifeState>()(
         }
         return state;
       },
+      // observations/syncQueue are deliberately excluded: they now live in
+      // SQLite (see hydrateObservationsFromDb), not this AsyncStorage blob.
       partialize: (state) => ({
         packs: state.packs,
-        observations: state.observations,
         localIndividuals: state.localIndividuals,
-        syncQueue: state.syncQueue,
         miewidModel: state.miewidModel,
         nextFieldId: state.nextFieldId,
       }),
     },
   ),
 );
+
+/**
+ * Loads observations and the sync queue from SQLite into the store's
+ * in-memory state. Call once during app startup, after initDatabase() and
+ * after the AsyncStorage-backed slice has rehydrated -- see App.tsx.
+ */
+export async function hydrateObservationsFromDb(): Promise<void> {
+  const [observations, syncQueue] = await Promise.all([
+    listObservationsWithDetections(),
+    listSyncQueue(),
+  ]);
+  useWildlifeStore.setState({ observations, syncQueue });
+}

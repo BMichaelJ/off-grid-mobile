@@ -58,6 +58,135 @@ export const clearMockStorage = () => {
 };
 
 // ============================================================================
+// @op-engineering/op-sqlite Mock
+//
+// A minimal in-memory SQL simulator scoped exactly to the statements
+// src/services/database/*.ts issues (plain INSERT/SELECT/UPDATE/DELETE, a
+// handful of PRAGMAs). It is NOT a general SQL engine -- it exists so unit
+// tests can exercise real insert/query/update round-trips through the
+// repository layer without a native binding. Real correctness against actual
+// SQLite still needs verification on-device before shipping.
+// ============================================================================
+type MockSqlRow = Record<string, unknown>;
+const mockSqlTables: Record<string, MockSqlRow[]> = {
+  observations: [],
+  detections: [],
+  sync_queue: [],
+};
+let mockSqliteUserVersion = 0;
+
+export const resetMockSqlite = () => {
+  mockSqlTables.observations = [];
+  mockSqlTables.detections = [];
+  mockSqlTables.sync_queue = [];
+  mockSqliteUserVersion = 0;
+};
+
+function mockSqlTableName(sql: string, afterKeyword: string): string {
+  const match = sql.match(new RegExp(`${afterKeyword}\\s+(?:OR REPLACE\\s+)?(?:INTO\\s+)?(\\w+)`, 'i'));
+  return match ? match[1] : '';
+}
+
+function mockSqlInsertColumns(sql: string): string[] {
+  const match = sql.match(/\(([^)]+)\)\s*VALUES/i);
+  return match ? match[1].split(',').map((c) => c.trim()) : [];
+}
+
+function mockSqlInsert(sql: string, params: unknown[]): { rows: MockSqlRow[]; rowsAffected: number } {
+  const table = mockSqlTableName(sql, 'INSERT');
+  const columns = mockSqlInsertColumns(sql);
+  const row: MockSqlRow = {};
+  columns.forEach((col, i) => {
+    row[col] = params[i] ?? null;
+  });
+  if (/INSERT OR REPLACE/i.test(sql)) {
+    const primaryKey = table === 'sync_queue' ? 'observation_id' : 'id';
+    mockSqlTables[table] = (mockSqlTables[table] ?? []).filter((r) => r[primaryKey] !== row[primaryKey]);
+  }
+  mockSqlTables[table] = [...(mockSqlTables[table] ?? []), row];
+  return { rows: [], rowsAffected: 1 };
+}
+
+function mockSqlSelect(sql: string): { rows: MockSqlRow[]; rowsAffected: number } {
+  const table = mockSqlTableName(sql, 'FROM');
+  let rows = [...(mockSqlTables[table] ?? [])];
+  const orderMatch = sql.match(/ORDER BY (\w+)/i);
+  if (orderMatch) {
+    const column = orderMatch[1];
+    rows = rows.sort((a, b) => ((a[column] as never) > (b[column] as never) ? 1 : -1));
+  }
+  return { rows, rowsAffected: 0 };
+}
+
+function mockSqlUpdate(sql: string, params: unknown[]): { rows: MockSqlRow[]; rowsAffected: number } {
+  const match = sql.match(/UPDATE\s+(\w+)\s+SET\s+(.+?)\s+WHERE\s+(.+?);?$/is);
+  if (!match) return { rows: [], rowsAffected: 0 };
+  const [, table, setClause, whereClause] = match;
+  const setColumns = setClause.split(',').map((c) => c.split('=')[0].trim());
+  const whereColumns = whereClause.split(/AND/i).map((c) => c.split('=')[0].trim());
+  const setValues = params.slice(0, setColumns.length);
+  const whereValues = params.slice(setColumns.length, setColumns.length + whereColumns.length);
+
+  let rowsAffected = 0;
+  mockSqlTables[table] = (mockSqlTables[table] ?? []).map((row) => {
+    const isMatch = whereColumns.every((col, i) => row[col] === whereValues[i]);
+    if (!isMatch) return row;
+    rowsAffected += 1;
+    const updated = { ...row };
+    setColumns.forEach((col, i) => {
+      updated[col] = setValues[i] ?? null;
+    });
+    return updated;
+  });
+  return { rows: [], rowsAffected };
+}
+
+function mockSqlExecute(sql: string, params: unknown[] = []): Promise<{ rows: MockSqlRow[]; rowsAffected: number }> {
+  const trimmed = sql.trim();
+  const upper = trimmed.toUpperCase();
+
+  if (upper.startsWith('PRAGMA JOURNAL_MODE')) {
+    return Promise.resolve({ rows: [], rowsAffected: 0 });
+  }
+  const setVersionMatch = trimmed.match(/PRAGMA user_version = (\d+)/i);
+  if (setVersionMatch) {
+    mockSqliteUserVersion = Number(setVersionMatch[1]);
+    return Promise.resolve({ rows: [], rowsAffected: 0 });
+  }
+  if (upper.startsWith('PRAGMA USER_VERSION')) {
+    return Promise.resolve({ rows: [{ user_version: mockSqliteUserVersion }], rowsAffected: 0 });
+  }
+  if (upper.startsWith('CREATE TABLE') || upper.startsWith('CREATE INDEX')) {
+    return Promise.resolve({ rows: [], rowsAffected: 0 });
+  }
+  if (upper.startsWith('DELETE FROM')) {
+    const table = mockSqlTableName(trimmed, 'FROM');
+    mockSqlTables[table] = [];
+    return Promise.resolve({ rows: [], rowsAffected: 0 });
+  }
+  if (upper.startsWith('INSERT')) {
+    return Promise.resolve(mockSqlInsert(trimmed, params));
+  }
+  if (upper.startsWith('SELECT')) {
+    return Promise.resolve(mockSqlSelect(trimmed));
+  }
+  if (upper.startsWith('UPDATE')) {
+    return Promise.resolve(mockSqlUpdate(trimmed, params));
+  }
+  return Promise.resolve({ rows: [], rowsAffected: 0 });
+}
+
+jest.mock('@op-engineering/op-sqlite', () => ({
+  open: jest.fn(() => ({
+    execute: jest.fn((sql: string, params?: unknown[]) => mockSqlExecute(sql, params)),
+    transaction: jest.fn(async (fn: (tx: { execute: typeof mockSqlExecute }) => Promise<void>) => {
+      await fn({ execute: mockSqlExecute });
+    }),
+    close: jest.fn(),
+  })),
+}));
+
+// ============================================================================
 // React Native Mocks - Partial mocks to avoid full module loading issues
 // ============================================================================
 // Note: We don't mock the entire 'react-native' module as it causes issues

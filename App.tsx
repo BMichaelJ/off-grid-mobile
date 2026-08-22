@@ -17,8 +17,9 @@ import {
   packManager,
   reconcileMiewidModel,
 } from './src/services';
+import { initDatabase } from './src/services/database';
 import logger from './src/utils/logger';
-import { useAppStore, useAuthStore, useWildlifeStore } from './src/stores';
+import { useAppStore, useAuthStore, useWildlifeStore, hydrateObservationsFromDb } from './src/stores';
 import { LockScreen } from './src/screens';
 import { useAppState } from './src/hooks/useAppState';
 import { LogBox } from 'react-native';
@@ -90,6 +91,17 @@ function App() {
       // Ensure persisted stores are hydrated before use
       await ensureAppStoreHydrated();
       await ensureWildlifeStoreHydrated();
+
+      // Open (and migrate, if needed) the local SQLite database, then load
+      // observations/sync queue into the store -- must happen before any
+      // screen that reads useWildlifeStore().observations renders.
+      try {
+        await initDatabase();
+        await hydrateObservationsFromDb();
+        logger.log('[App] Database initialized and observations hydrated');
+      } catch (err) {
+        logger.error('[App] Failed to initialize database:', err);
+      }
 
       // Initialize pack manager (creates packs directory if needed)
       try {

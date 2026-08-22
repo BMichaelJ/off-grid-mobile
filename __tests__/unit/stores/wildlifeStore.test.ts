@@ -8,6 +8,8 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useWildlifeStore } from '../../../src/stores/wildlifeStore';
+import { initDatabase } from '../../../src/services/database';
+import * as database from '../../../src/services/database';
 import type {
   EmbeddingPack,
   Observation,
@@ -16,6 +18,22 @@ import type {
   MiewIDModelRecord,
   SyncQueueItem,
 } from '../../../src/types';
+
+// The four mutating actions are wrapped in jest.fn() that pass through to
+// the real (op-sqlite-mocked) implementation by default -- this lets the
+// "rollback on SQLite write failure" tests below override one call with
+// mockRejectedValueOnce, while every other test in this file keeps
+// exercising the real repository logic unchanged.
+jest.mock('../../../src/services/database', () => {
+  const actual = jest.requireActual('../../../src/services/database');
+  return {
+    ...actual,
+    insertObservationWithDetections: jest.fn(actual.insertObservationWithDetections),
+    updateDetectionFields: jest.fn(actual.updateDetectionFields),
+    upsertSyncQueueItem: jest.fn(actual.upsertSyncQueueItem),
+    updateSyncQueueFields: jest.fn(actual.updateSyncQueueFields),
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Factory helpers (local to this test file)
@@ -107,6 +125,10 @@ const makeSyncQueueItem = (overrides: Partial<SyncQueueItem> = {}): SyncQueueIte
 // ---------------------------------------------------------------------------
 
 describe('wildlifeStore', () => {
+  beforeAll(async () => {
+    await initDatabase();
+  });
+
   beforeEach(() => {
     useWildlifeStore.getState().reset();
   });
@@ -572,6 +594,64 @@ describe('wildlifeStore', () => {
       expect(state.syncQueue).toEqual([]);
       expect(state.miewidModel).toBeNull();
       expect(state.nextFieldId).toBe(1);
+    });
+  });
+
+  // ========================================================================
+  // Rollback on SQLite write failure
+  //
+  // These four actions optimistically update in-memory state before the
+  // SQLite write resolves (so existing synchronous call sites keep working).
+  // If the write fails, the in-memory state must be rolled back -- otherwise
+  // the UI would show data that was never durably saved and silently
+  // vanishes on the next app restart.
+  // ========================================================================
+  describe('rollback on SQLite write failure', () => {
+    it('addObservation rolls back the observation if the SQLite write fails', async () => {
+      (database.insertObservationWithDetections as jest.Mock).mockRejectedValueOnce(new Error('disk full'));
+      const obs = makeObservation();
+
+      await expect(useWildlifeStore.getState().addObservation(obs)).rejects.toThrow('disk full');
+
+      expect(useWildlifeStore.getState().observations).toHaveLength(0);
+    });
+
+    it('updateDetection restores the previous observation if the SQLite write fails', async () => {
+      const obs = makeObservation({
+        id: 'obs-1',
+        detections: [makeDetection({ id: 'det-1', observationId: 'obs-1', speciesConfidence: 0.5 })],
+      });
+      await useWildlifeStore.getState().addObservation(obs);
+
+      (database.updateDetectionFields as jest.Mock).mockRejectedValueOnce(new Error('disk full'));
+
+      await expect(
+        useWildlifeStore.getState().updateDetection('obs-1', 'det-1', { speciesConfidence: 0.99 }),
+      ).rejects.toThrow('disk full');
+
+      expect(useWildlifeStore.getState().observations[0].detections[0].speciesConfidence).toBe(0.5);
+    });
+
+    it('addToSyncQueue rolls back the item if the SQLite write fails', async () => {
+      (database.upsertSyncQueueItem as jest.Mock).mockRejectedValueOnce(new Error('disk full'));
+      const item = makeSyncQueueItem();
+
+      await expect(useWildlifeStore.getState().addToSyncQueue(item)).rejects.toThrow('disk full');
+
+      expect(useWildlifeStore.getState().syncQueue).toHaveLength(0);
+    });
+
+    it('updateSyncStatus restores the previous item if the SQLite write fails', async () => {
+      const item = makeSyncQueueItem({ observationId: 'obs-1', status: 'pending' });
+      await useWildlifeStore.getState().addToSyncQueue(item);
+
+      (database.updateSyncQueueFields as jest.Mock).mockRejectedValueOnce(new Error('disk full'));
+
+      await expect(
+        useWildlifeStore.getState().updateSyncStatus('obs-1', { status: 'synced' }),
+      ).rejects.toThrow('disk full');
+
+      expect(useWildlifeStore.getState().syncQueue[0].status).toBe('pending');
     });
   });
 });

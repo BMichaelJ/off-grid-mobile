@@ -7,3 +7,5 @@ export { buildEmbeddingDatabase } from './embeddingDatabaseBuilder';
 export { wildlifePipeline } from './wildlifePipeline';
 export { reconcileMiewidModel, checkEmbeddingModelCompatibility, acquireMiewidModel } from './miewidModelManager';
 export { modelDownloadService } from './modelDownloadService';
+export { persistObservationFiles, deleteObservationFiles } from './observationStorage';
+

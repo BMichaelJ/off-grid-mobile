@@ -18,9 +18,23 @@
 import React from 'react';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import { Alert, Platform } from 'react-native';
+import RNFS from 'react-native-fs';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import { wildlifePipeline } from '../../../src/services/wildlifePipeline';
 import { useWildlifeStore } from '../../../src/stores/wildlifeStore';
+import { initDatabase } from '../../../src/services/database';
+import * as database from '../../../src/services/database';
+
+// database is wrapped so one test can force insertObservationWithDetections
+// to reject; every other test passes through to the real (op-sqlite-mocked)
+// implementation unchanged.
+jest.mock('../../../src/services/database', () => {
+  const actual = jest.requireActual('../../../src/services/database');
+  return {
+    ...actual,
+    insertObservationWithDetections: jest.fn(actual.insertObservationWithDetections),
+  };
+});
 
 // Mock navigation
 const mockNavigate = jest.fn();
@@ -134,6 +148,10 @@ const MOCK_DETECTION = {
 };
 
 describe('CaptureScreen', () => {
+  beforeAll(async () => {
+    await initDatabase();
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     useWildlifeStore.setState({
@@ -485,6 +503,33 @@ describe('CaptureScreen', () => {
     });
     expect(useWildlifeStore.getState().observations).toHaveLength(0);
     expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('deletes the just-persisted files if the SQLite save fails after they were moved', async () => {
+    (wildlifePipeline.processPhoto as jest.Mock).mockResolvedValue({
+      ...MOCK_PIPELINE_RESULT,
+      detections: [MOCK_DETECTION],
+    });
+    (database.insertObservationWithDetections as jest.Mock).mockRejectedValueOnce(
+      new Error('disk full'),
+    );
+    // deleteObservationFiles only unlinks a directory that exists.
+    (RNFS.exists as jest.Mock).mockResolvedValueOnce(true);
+
+    const { getByTestId } = render(<CaptureScreen />);
+    fireEvent.press(getByTestId('take-photo-button'));
+
+    await waitFor(() => {
+      expect(Alert.alert).toHaveBeenCalledWith('Detection Failed', 'disk full');
+    });
+
+    // The observation must not linger in memory once the durable save failed...
+    expect(useWildlifeStore.getState().observations).toHaveLength(0);
+    // ...and the photo/crop files that were already moved into durable
+    // storage must be cleaned up rather than left as an orphaned directory.
+    expect(RNFS.unlink).toHaveBeenCalledWith(
+      expect.stringContaining('/observations/obs-123'),
+    );
   });
 
   // ==========================================================================
