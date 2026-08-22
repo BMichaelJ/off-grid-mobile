@@ -357,6 +357,29 @@ jest.mock('react-native-image-picker', () => ({
   })),
 }));
 
+// @react-native-community/geolocation mock
+jest.mock('@react-native-community/geolocation', () => ({
+  __esModule: true,
+  default: {
+    getCurrentPosition: jest.fn((success: (position: {
+      coords: { latitude: number; longitude: number; accuracy: number };
+    }) => void) => {
+      success({
+        coords: {
+          latitude: 1.2345,
+          longitude: 2.3456,
+          accuracy: 7,
+        },
+      });
+    }),
+    watchPosition: jest.fn(() => 1),
+    clearWatch: jest.fn(),
+    stopObserving: jest.fn(),
+    requestAuthorization: jest.fn(),
+    setRNConfiguration: jest.fn(),
+  },
+}));
+
 // react-native-keychain mock
 jest.mock('react-native-keychain', () => ({
   setGenericPassword: jest.fn(() => Promise.resolve(true)),
@@ -512,6 +535,11 @@ jest.mock('react-native-safe-area-context', () => {
 // ============================================================================
 // Global Test Utilities
 // ============================================================================
+
+const { PermissionsAndroid } = require('react-native');
+jest.spyOn(PermissionsAndroid, 'request').mockResolvedValue(
+  PermissionsAndroid.RESULTS.GRANTED,
+);
 
 // Silence console during tests (optional - comment out for debugging)
 // global.console = {

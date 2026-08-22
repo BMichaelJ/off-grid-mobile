@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
-import { Alert, Platform } from 'react-native';
+import { Alert, PermissionsAndroid, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import Geolocation from '@react-native-community/geolocation';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { wildlifePipeline } from '../../services/wildlifePipeline';
@@ -75,19 +76,57 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
  * Attempt to get the device's current GPS coordinates.
  * Returns null if unavailable — GPS is best-effort since the app
  * may be used offline or without location permissions.
- *
- * TODO: Integrate @react-native-community/geolocation or
- * expo-location once native setup is in place.
  */
 async function getDeviceLocation(): Promise<{
   lat: number;
   lon: number;
   accuracy: number;
 } | null> {
-  // GPS integration requires native module setup that is out of scope
-  // for this wiring task. Return null for now; Task 5.x will add
-  // actual Geolocation calls.
-  return null;
+  try {
+    if (Platform.OS === 'android') {
+      const permission = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        {
+          title: 'Location permission',
+          message:
+            'Allow Off Grid Mobile to capture GPS coordinates for this observation.',
+          buttonPositive: 'Allow',
+          buttonNegative: 'Skip',
+        },
+      );
+
+      if (permission !== PermissionsAndroid.RESULTS.GRANTED) {
+        return null;
+      }
+    }
+
+    return await new Promise((resolve) => {
+      Geolocation.getCurrentPosition(
+        (position) => {
+          resolve({
+            lat: position.coords.latitude,
+            lon: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+          });
+        },
+        (error) => {
+          logger.warn(
+            `[CaptureFlow] Unable to get device location: ${error.message}`,
+          );
+          resolve(null);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        },
+      );
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.warn(`[CaptureFlow] Unable to get device location: ${message}`);
+    return null;
+  }
 }
 
 /** Build device info from React Native Platform API. */

@@ -12,12 +12,16 @@
  * - Shows error alert when pipeline fails
  * - Shows cancel state when user cancels photo selection
  * - Saves observation with device info from Platform API
- * - Passes GPS as null (stub) to pipeline and observation
+ * - Saves best-effort GPS metadata on observations
  */
 
 import React from 'react';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
-import { Alert, Platform } from 'react-native';
+import Geolocation, {
+  type GeolocationError,
+  type GeolocationResponse,
+} from '@react-native-community/geolocation';
+import { Alert, PermissionsAndroid, Platform } from 'react-native';
 import RNFS from 'react-native-fs';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import { wildlifePipeline } from '../../../src/services/wildlifePipeline';
@@ -95,6 +99,19 @@ import { CaptureScreen } from '../../../src/screens/CaptureScreen';
 const mockProcessPhoto = wildlifePipeline.processPhoto as jest.Mock;
 const mockLaunchCamera = launchCamera as jest.Mock;
 const mockLaunchImageLibrary = launchImageLibrary as jest.Mock;
+const mockGetCurrentPosition = Geolocation.getCurrentPosition as jest.MockedFunction<
+  typeof Geolocation.getCurrentPosition
+>;
+const mockRequestLocationPermission =
+  PermissionsAndroid.request as jest.MockedFunction<
+    typeof PermissionsAndroid.request
+  >;
+
+const MOCK_GPS = {
+  lat: 1.2345,
+  lon: 2.3456,
+  accuracy: 7,
+};
 
 const makeTestPack = (overrides: Record<string, unknown> = {}) => ({
   id: 'pack-1',
@@ -148,8 +165,23 @@ const MOCK_DETECTION = {
 };
 
 describe('CaptureScreen', () => {
+  const originalPlatformOsDescriptor = Object.getOwnPropertyDescriptor(
+    Platform,
+    'OS',
+  );
+
   beforeAll(async () => {
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      get: () => 'android',
+    });
     await initDatabase();
+  });
+
+  afterAll(() => {
+    if (originalPlatformOsDescriptor) {
+      Object.defineProperty(Platform, 'OS', originalPlatformOsDescriptor);
+    }
   });
 
   beforeEach(() => {
@@ -174,6 +206,27 @@ describe('CaptureScreen', () => {
     mockLaunchImageLibrary.mockResolvedValue({
       assets: [{ uri: 'file:///mock/gallery.jpg' }],
     });
+    mockRequestLocationPermission.mockResolvedValue(
+      PermissionsAndroid.RESULTS.GRANTED,
+    );
+    mockGetCurrentPosition.mockImplementation(
+      (
+        success: (position: GeolocationResponse) => void,
+      ) => {
+        success({
+          coords: {
+            latitude: MOCK_GPS.lat,
+            longitude: MOCK_GPS.lon,
+            accuracy: MOCK_GPS.accuracy,
+            altitude: null,
+            heading: null,
+            speed: null,
+            altitudeAccuracy: null,
+          },
+          timestamp: 0,
+        });
+      },
+    );
   });
 
   // ==========================================================================
@@ -285,7 +338,7 @@ describe('CaptureScreen', () => {
     });
   });
 
-  it('saves GPS as null (stub) in observation', async () => {
+  it('saves GPS coordinates in observation when location permission is granted', async () => {
     const { getByTestId } = render(<CaptureScreen />);
     fireEvent.press(getByTestId('take-photo-button'));
 
@@ -293,8 +346,73 @@ describe('CaptureScreen', () => {
       expect(mockNavigate).toHaveBeenCalled();
     });
 
-    // GPS saved in observation (pipeline no longer receives GPS)
     const observations = useWildlifeStore.getState().observations;
+    expect(observations[0].gps).toEqual(MOCK_GPS);
+    expect(mockRequestLocationPermission).toHaveBeenCalledWith(
+      PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+      expect.objectContaining({
+        title: 'Location permission',
+      }),
+    );
+    expect(mockGetCurrentPosition).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.any(Function),
+      expect.objectContaining({
+        enableHighAccuracy: true,
+        timeout: 10000,
+      }),
+    );
+  });
+
+  it('saves GPS as null when location permission is denied and still completes capture', async () => {
+    mockRequestLocationPermission.mockResolvedValue(
+      PermissionsAndroid.RESULTS.DENIED,
+    );
+
+    const { getByTestId } = render(<CaptureScreen />);
+    fireEvent.press(getByTestId('take-photo-button'));
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith(
+        'DetectionResults',
+        { observationId: 'obs-123' },
+      );
+    });
+
+    const observations = useWildlifeStore.getState().observations;
+    expect(observations).toHaveLength(1);
+    expect(observations[0].gps).toBeNull();
+    expect(mockGetCurrentPosition).not.toHaveBeenCalled();
+  });
+
+  it('saves GPS as null when geolocation lookup fails and still completes capture', async () => {
+    mockGetCurrentPosition.mockImplementation(
+      (
+        _success: (position: GeolocationResponse) => void,
+        error?: (error: GeolocationError) => void,
+      ) => {
+        error?.({
+          code: 3,
+          message: 'Location timeout',
+          PERMISSION_DENIED: 1,
+          POSITION_UNAVAILABLE: 2,
+          TIMEOUT: 3,
+        });
+      },
+    );
+
+    const { getByTestId } = render(<CaptureScreen />);
+    fireEvent.press(getByTestId('take-photo-button'));
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith(
+        'DetectionResults',
+        { observationId: 'obs-123' },
+      );
+    });
+
+    const observations = useWildlifeStore.getState().observations;
+    expect(observations).toHaveLength(1);
     expect(observations[0].gps).toBeNull();
   });
 

@@ -5,6 +5,12 @@
     <!-- For voice recording -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!-- For precise GPS coordinates on observations -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <!-- For approximate location on observations -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
     <!-- For haptic feedback -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
