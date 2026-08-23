@@ -174,6 +174,17 @@ export interface Detection {
     reviewStatus: 'pending' | 'approved' | 'rejected';
   };
   encounterFields: EncounterFields;
+  /**
+   * The Ganesha backend submission id returned once this detection has been
+   * successfully synced (see `POST /projects/{id}/submissions`), or `null`
+   * if it has not been submitted yet. Set only for detections the sync
+   * engine actually submits -- see `services/syncEngine` for which
+   * detections are eligible (currently: reviewed + approved against a real
+   * pack individual; local-only "new individual" approvals are not
+   * submitted yet, there is no backend concept for an uncataloged
+   * individual).
+   */
+  ganeshaSubmissionId: string | null;
 }
 
 export interface MatchCandidate {
@@ -201,6 +212,24 @@ export type SyncStatus =
   | 'failed'
   | 'failedPermanent';
 
+/**
+ * NOTE: the `wildbook*` field names are inherited from upstream off-grid-mobile,
+ * which synced observations directly to a Wildbook instance. Project Ganesha's
+ * sync engine currently targets the Ganesha backend (`POST /projects/{id}/submissions`)
+ * instead, not Wildbook directly -- these fields are repurposed to hold Ganesha's
+ * submission bookkeeping (`wildbookEncounterIds` holds the returned Ganesha
+ * submission id(s), one per detection in the observation).
+ *
+ * This is a deliberate, undecided placeholder, not a finished design: if direct
+ * Wildbook sync is added later as a *replacement* for the Ganesha sync, these
+ * fields can be reused as-is (just point the write at a different endpoint). If
+ * it's added as an *additional* target (dual-write to both Ganesha and Wildbook),
+ * this single status/id-list pair per observation cannot represent both targets'
+ * independent sync state -- that would need a second set of columns or a
+ * normalized per-target sync_targets table, not a rename. Don't assume either
+ * shape has already been decided; the product decision on redirect-vs-dual-write
+ * had not been made as of this comment.
+ */
 export interface SyncQueueItem {
   observationId: string;
   status: SyncStatus;

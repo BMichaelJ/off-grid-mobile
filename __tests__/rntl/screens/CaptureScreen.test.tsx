@@ -162,6 +162,7 @@ const MOCK_DETECTION = {
     submitterId: null,
     projectId: null,
   },
+  ganeshaSubmissionId: null,
 };
 
 describe('CaptureScreen', () => {

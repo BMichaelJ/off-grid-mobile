@@ -80,6 +80,7 @@ const makeDetection = (overrides: Partial<Detection> = {}): Detection => ({
     submitterId: null,
     projectId: null,
   },
+  ganeshaSubmissionId: null,
   ...overrides,
 });
 

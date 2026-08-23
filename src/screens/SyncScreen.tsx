@@ -1,5 +1,5 @@
-import React, { useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Alert } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { View, Text, FlatList, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { Card } from '../components';
@@ -9,6 +9,8 @@ import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 import { useWildlifeStore } from '../stores/wildlifeStore';
 import type { SyncQueueItem, SyncStatus } from '../types/wildlife';
+import { syncAllObservations, syncObservation } from '../services/syncEngine';
+import logger from '../utils/logger';
 
 // ---------------------------------------------------------------------------
 // Status display helpers
@@ -50,20 +52,54 @@ export const SyncScreen: React.FC = () => {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
   const syncQueue = useWildlifeStore((s) => s.syncQueue);
-  const updateSyncStatus = useWildlifeStore((s) => s.updateSyncStatus);
+  const observations = useWildlifeStore((s) => s.observations);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncingObservationId, setSyncingObservationId] = useState<string | null>(null);
 
-  const handleSyncAll = useCallback(() => {
-    Alert.alert('Sync', 'Sync not yet implemented');
-  }, []);
+  const handleSyncAll = useCallback(async () => {
+    if (isSyncing) {
+      return;
+    }
+    setIsSyncing(true);
+    try {
+      const result = await syncAllObservations();
+      const parts: string[] = [];
+      if (result.synced > 0) parts.push(`${result.synced} synced`);
+      if (result.waitingForReview > 0) parts.push(`${result.waitingForReview} waiting on review`);
+      if (result.failed > 0) parts.push(`${result.failed} failed`);
+      Alert.alert('Sync', parts.length > 0 ? parts.join(', ') : 'Nothing to sync');
+    } catch (error) {
+      logger.error('[SyncScreen] Sync All failed unexpectedly:', error);
+      Alert.alert('Sync', 'Sync failed unexpectedly -- check the logs and try again.');
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [isSyncing]);
 
   const handleRetry = useCallback(
-    (item: SyncQueueItem) => {
-      updateSyncStatus(item.observationId, {
-        status: 'pending',
-        retryCount: item.retryCount + 1,
-      });
+    async (item: SyncQueueItem) => {
+      if (isSyncing || syncingObservationId) {
+        return;
+      }
+      const observation = observations.find((obs) => obs.id === item.observationId);
+      if (!observation) {
+        logger.warn(`[SyncScreen] Retry requested for unknown observation ${item.observationId}`);
+        return;
+      }
+      setSyncingObservationId(item.observationId);
+      try {
+        const outcome = await syncObservation(observation);
+        if (outcome.status === 'failed') {
+          Alert.alert('Sync failed', outcome.message);
+        }
+      } catch (error) {
+        logger.error(`[SyncScreen] Retry failed unexpectedly for ${item.observationId}:`, error);
+        Alert.alert('Sync failed', 'An unexpected error occurred -- check the logs and try again.');
+      } finally {
+        setSyncingObservationId(null);
+      }
     },
-    [updateSyncStatus],
+    [isSyncing, syncingObservationId, observations],
   );
 
   const renderItem = useCallback(
@@ -71,6 +107,7 @@ export const SyncScreen: React.FC = () => {
       const config = getStatusConfig(item.status);
       const statusColor = colors[config.colorKey];
       const isFailed = item.status === 'failed' || item.status === 'failedPermanent';
+      const isRetrying = syncingObservationId === item.observationId;
 
       return (
         <Card style={styles.itemCard} testID={`sync-item-${index}`}>
@@ -98,10 +135,15 @@ export const SyncScreen: React.FC = () => {
                 <TouchableOpacity
                   style={styles.retryButton}
                   onPress={() => handleRetry(item)}
+                  disabled={isRetrying || isSyncing}
                   testID={`sync-retry-${index}`}
                 >
-                  <Icon name="refresh-cw" size={14} color={styles.retryText.color} />
-                  <Text style={styles.retryText}>Retry</Text>
+                  {isRetrying ? (
+                    <ActivityIndicator size="small" color={styles.retryText.color} />
+                  ) : (
+                    <Icon name="refresh-cw" size={14} color={styles.retryText.color} />
+                  )}
+                  <Text style={styles.retryText}>{isRetrying ? 'Retrying...' : 'Retry'}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -109,7 +151,7 @@ export const SyncScreen: React.FC = () => {
         </Card>
       );
     },
-    [styles, handleRetry],
+    [styles, colors, handleRetry, isSyncing, syncingObservationId],
   );
 
   return (
@@ -121,11 +163,17 @@ export const SyncScreen: React.FC = () => {
       <TouchableOpacity
         style={styles.syncAllButton}
         onPress={handleSyncAll}
+        disabled={isSyncing}
         testID="sync-all-button"
       >
-        <Icon name="upload-cloud" size={16} color={styles.syncAllText.color} />
-        <Text style={styles.syncAllText}>Sync All</Text>
+        {isSyncing ? (
+          <ActivityIndicator size="small" color={styles.syncAllText.color} />
+        ) : (
+          <Icon name="upload-cloud" size={16} color={styles.syncAllText.color} />
+        )}
+        <Text style={styles.syncAllText}>{isSyncing ? 'Syncing...' : 'Sync All'}</Text>
       </TouchableOpacity>
+
 
       {syncQueue.length === 0 ? (
         <View style={styles.emptyState}>

@@ -140,3 +140,101 @@ describe('ganeshaApiClient.getLatestPack', () => {
     expect(result).toEqual({ ok: false, code: 'not-found', message: 'HTTP 404', httpStatus: 404 });
   });
 });
+
+describe('ganeshaApiClient.getUploadUrl', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('POSTs the filename and returns the upload/blob URLs', async () => {
+    const body = {
+      uploadUrl: 'https://ganeshasfc2o4rujo76u.blob.core.windows.net/elephant-images/proj_kariega/u1/x_det-1.jpg?sig=x',
+      blobUrl: 'https://ganeshasfc2o4rujo76u.blob.core.windows.net/elephant-images/proj_kariega/u1/x_det-1.jpg',
+    };
+    mockFetch.mockResolvedValueOnce(jsonResponse(200, body));
+
+    const result = await ganeshaApiClient.getUploadUrl('proj_kariega', 'det-1.jpg');
+
+    expect(result).toEqual({ ok: true, data: body });
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${GANESHA_API_BASE_URL}/projects/proj_kariega/upload-url`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          Authorization: expect.stringMatching(/^Bearer /),
+          'Content-Type': 'application/json',
+        }),
+        body: JSON.stringify({ filename: 'det-1.jpg' }),
+      }),
+    );
+  });
+
+  it('maps a network failure to a network-error result', async () => {
+    mockFetch.mockRejectedValueOnce(new Error('offline'));
+
+    const result = await ganeshaApiClient.getUploadUrl('proj_kariega', 'det-1.jpg');
+
+    expect(result).toEqual({ ok: false, code: 'network-error', message: 'offline' });
+  });
+});
+
+describe('ganeshaApiClient.submitObservation', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('POSTs the submission payload and returns the created submission id', async () => {
+    const body = { submissionId: 'sub-1', status: 'reviewing', imageUrl: 'https://example.com/signed.jpg' };
+    mockFetch.mockResolvedValueOnce(jsonResponse(200, body));
+
+    const payload = {
+      imageUrl: 'https://ganeshasfc2o4rujo76u.blob.core.windows.net/elephant-images/proj_kariega/u1/x_det-1.jpg',
+      elephantId: 'elephant-thomas',
+      confidence: 0.954,
+      alternatives: [{ individualId: 'elephant-thomas', score: 0.954, source: 'pack', refPhotoIndex: 0 }],
+      lat: -33.5,
+      long: 26.9,
+      observationDate: '2026-08-23T10:00:00Z',
+      captureTimestamp: '2026-08-23T10:00:00Z',
+      deviceModel: 'Pixel 9a',
+      deviceOs: 'Android 16',
+    };
+    const result = await ganeshaApiClient.submitObservation('proj_kariega', payload);
+
+    expect(result).toEqual({ ok: true, data: body });
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${GANESHA_API_BASE_URL}/projects/proj_kariega/submissions`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          Authorization: expect.stringMatching(/^Bearer /),
+          'Content-Type': 'application/json',
+        }),
+        body: JSON.stringify(payload),
+      }),
+    );
+  });
+
+  it('maps a 401 to an unauthorized result', async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse(401, { error: 'Unauthorized' }));
+
+    const result = await ganeshaApiClient.submitObservation('proj_kariega', {
+      imageUrl: 'https://example.com/x.jpg',
+      elephantId: 'elephant-thomas',
+    });
+
+    expect(result).toEqual({ ok: false, code: 'unauthorized', message: 'HTTP 401', httpStatus: 401 });
+  });
+
+  it('maps a 500 to an http-error result', async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse(500, { error: 'Internal error' }));
+
+    const result = await ganeshaApiClient.submitObservation('proj_kariega', {
+      imageUrl: 'https://example.com/x.jpg',
+      elephantId: 'elephant-thomas',
+    });
+
+    expect(result).toEqual({ ok: false, code: 'http-error', message: 'HTTP 500', httpStatus: 500 });
+  });
+});
+

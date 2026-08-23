@@ -34,8 +34,8 @@ export async function insertObservationWithDetections(observation: Observation):
         `INSERT INTO detections
           (id, observation_id, bbox_x, bbox_y, bbox_width, bbox_height, species, species_confidence,
            cropped_image_uri, embedding_json, top_candidates_json, approved_individual, review_status,
-           location_id, sex, life_stage, behavior, submitter_id, project_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           location_id, sex, life_stage, behavior, submitter_id, project_id, ganesha_submission_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           detection.id,
           observation.id,
@@ -56,6 +56,7 @@ export async function insertObservationWithDetections(observation: Observation):
           detection.encounterFields.behavior,
           detection.encounterFields.submitterId,
           detection.encounterFields.projectId,
+          detection.ganeshaSubmissionId,
         ],
       );
     }
@@ -138,6 +139,10 @@ export async function updateDetectionFields(
       updates.encounterFields.submitterId,
       updates.encounterFields.projectId,
     );
+  }
+  if (updates.ganeshaSubmissionId !== undefined) {
+    setClauses.push('ganesha_submission_id = ?');
+    params.push(updates.ganeshaSubmissionId);
   }
 
   if (setClauses.length === 0) {

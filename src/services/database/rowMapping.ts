@@ -33,6 +33,7 @@ export interface DetectionRow {
   behavior: string | null;
   submitter_id: string | null;
   project_id: string | null;
+  ganesha_submission_id: string | null;
 }
 
 export interface SyncQueueRow {
@@ -73,6 +74,7 @@ export function mapDetectionRow(row: DetectionRow): Detection {
       submitterId: row.submitter_id,
       projectId: row.project_id,
     },
+    ganeshaSubmissionId: row.ganesha_submission_id,
   };
 }
 

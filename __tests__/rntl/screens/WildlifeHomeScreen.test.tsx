@@ -280,6 +280,7 @@ describe('WildlifeHomeScreen', () => {
           submitterId: null,
           projectId: null,
         },
+        ganeshaSubmissionId: null,
       };
 
       useWildlifeStore.setState({
@@ -317,6 +318,7 @@ describe('WildlifeHomeScreen', () => {
           submitterId: null,
           projectId: null,
         },
+        ganeshaSubmissionId: null,
       };
 
       useWildlifeStore.setState({

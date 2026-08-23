@@ -1,36 +1,76 @@
 import { GANESHA_API_BASE_URL, GANESHA_API_DEV_TOKEN } from '../../config/ganeshaApi';
-import type { GaneshaApiErrorCode, GaneshaApiResult, LatestModelInfo, LatestPackInfo } from './types';
+import type {
+  GaneshaApiErrorCode,
+  GaneshaApiResult,
+  LatestModelInfo,
+  LatestPackInfo,
+  SubmitObservationPayload,
+  SubmitObservationResult,
+  UploadUrlInfo,
+} from './types';
 import logger from '../../utils/logger';
 
 /**
- * Thin client for the Ganesha backend's model/pack distribution endpoints
- * (backend/function_app.py: GET /models/{model_name}/latest,
- * GET /projects/{project_id}/packs/latest). Every call returns a typed
+ * Thin client for the Ganesha backend's model/pack distribution and field
+ * sync endpoints (backend/function_app.py: GET /models/{model_name}/latest,
+ * GET /projects/{project_id}/packs/latest, POST /projects/{project_id}/upload-url,
+ * POST /projects/{project_id}/submissions). Every call returns a typed
  * ok/err result rather than throwing, matching modelDownloadService's
  * DownloadOutcome convention -- callers branch on `.ok`, never try/catch.
  *
- * Auth is the `dev-token` bearer shortcut until mobile-entra-auth (MSAL)
+ * Auth is the dev-token bearer shortcut until mobile-entra-auth (MSAL)
  * lands; the header injection point is centralized here so swapping in a
- * real Entra ID token later is a one-line change in getJson(), not a
+ * real Entra ID token later is a one-line change in request(), not a
  * per-call-site change.
+ *
+ * Uploading the image bytes themselves (a direct PUT to the blob SAS URL
+ * `getUploadUrl` returns) is deliberately NOT part of this client -- that
+ * request goes straight to Azure Blob Storage, not the Ganesha backend, and
+ * needs different headers (`x-ms-blob-type`) than any call here. See
+ * `services/syncEngine` for that step.
  */
 class GaneshaApiClient {
   async getLatestModel(modelName: string): Promise<GaneshaApiResult<LatestModelInfo>> {
-    return this.getJson<LatestModelInfo>(`/models/${encodeURIComponent(modelName)}/latest`);
+    return this.request<LatestModelInfo>(`/models/${encodeURIComponent(modelName)}/latest`);
   }
 
   async getLatestPack(projectId: string): Promise<GaneshaApiResult<LatestPackInfo>> {
-    return this.getJson<LatestPackInfo>(
+    return this.request<LatestPackInfo>(
       `/projects/${encodeURIComponent(projectId)}/packs/latest`,
     );
   }
 
-  private async getJson<T>(path: string): Promise<GaneshaApiResult<T>> {
+  async getUploadUrl(projectId: string, filename: string): Promise<GaneshaApiResult<UploadUrlInfo>> {
+    return this.request<UploadUrlInfo>(
+      `/projects/${encodeURIComponent(projectId)}/upload-url`,
+      { method: 'POST', body: { filename } },
+    );
+  }
+
+  async submitObservation(
+    projectId: string,
+    payload: SubmitObservationPayload,
+  ): Promise<GaneshaApiResult<SubmitObservationResult>> {
+    return this.request<SubmitObservationResult>(
+      `/projects/${encodeURIComponent(projectId)}/submissions`,
+      { method: 'POST', body: payload },
+    );
+  }
+
+  private async request<T>(
+    path: string,
+    init: { method?: 'GET' | 'POST'; body?: unknown } = {},
+  ): Promise<GaneshaApiResult<T>> {
+    const authHeaderValue = ['Bearer', GANESHA_API_DEV_TOKEN].join(' ');
     let response: Response;
     try {
       response = await fetch(`${GANESHA_API_BASE_URL}${path}`, {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${GANESHA_API_DEV_TOKEN}` },
+        method: init.method ?? 'GET',
+        headers: {
+          Authorization: authHeaderValue,
+          ...(init.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        },
+        ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -72,6 +112,9 @@ export const ganeshaApiClient = new GaneshaApiClient();
 export type {
   LatestModelInfo,
   LatestPackInfo,
+  UploadUrlInfo,
+  SubmitObservationPayload,
+  SubmitObservationResult,
   GaneshaApiResult,
   GaneshaApiErrorCode,
 } from './types';

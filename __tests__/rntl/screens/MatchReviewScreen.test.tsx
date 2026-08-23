@@ -92,6 +92,7 @@ const makeDetection = (overrides: Record<string, any> = {}) => ({
     submitterId: null,
     projectId: null,
   },
+  ganeshaSubmissionId: null,
   ...overrides,
 });
 

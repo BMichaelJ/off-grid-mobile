@@ -201,6 +201,7 @@ class WildlifePipeline {
             submitterId: null,
             projectId: null,
           },
+          ganeshaSubmissionId: null,
         },
       };
     } catch (error) {

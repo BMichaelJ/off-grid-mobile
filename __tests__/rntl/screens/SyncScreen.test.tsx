@@ -1,10 +1,11 @@
 /**
  * SyncScreen Tests
  *
- * Tests for the sync queue stub screen including:
+ * Tests for the sync queue screen including:
  * - Screen renders with correct testID
  * - Header title "Sync Queue"
- * - Sync All button with "not yet implemented" alert
+ * - Sync All / Retry delegate to services/syncEngine (mocked here; the
+ *   engine itself has its own unit tests)
  * - Sync queue item rendering with status indicators
  * - Retry button for failed items
  * - Error message display
@@ -13,10 +14,16 @@
 
 import React from 'react';
 import { Alert } from 'react-native';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { useWildlifeStore } from '../../../src/stores/wildlifeStore';
 import { initDatabase } from '../../../src/services/database';
 import type { SyncQueueItem } from '../../../src/types/wildlife';
+import type { Observation } from '../../../src/types';
+
+jest.mock('../../../src/services/syncEngine', () => ({
+  syncAllObservations: jest.fn(),
+  syncObservation: jest.fn(),
+}));
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -55,6 +62,10 @@ jest.mock('react-native-vector-icons/Feather', () => {
 });
 
 import { SyncScreen } from '../../../src/screens/SyncScreen';
+import { syncAllObservations, syncObservation } from '../../../src/services/syncEngine';
+
+const mockSyncAllObservations = syncAllObservations as jest.Mock;
+const mockSyncObservation = syncObservation as jest.Mock;
 
 // ---------------------------------------------------------------------------
 // Factory helper
@@ -74,6 +85,18 @@ const createSyncItem = (
   ...overrides,
 });
 
+const createObservation = (overrides: Partial<Observation> = {}): Observation => ({
+  id: 'obs-abc123def456',
+  photoUri: 'file:///photo.jpg',
+  gps: null,
+  timestamp: '2025-01-01T00:00:00Z',
+  deviceInfo: { model: 'test', os: 'test' },
+  fieldNotes: null,
+  detections: [],
+  createdAt: '2025-01-01T00:00:00Z',
+  ...overrides,
+});
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -85,7 +108,7 @@ describe('SyncScreen', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    useWildlifeStore.setState({ syncQueue: [] });
+    useWildlifeStore.setState({ syncQueue: [], observations: [] });
   });
 
   // ==========================================================================
@@ -112,13 +135,27 @@ describe('SyncScreen', () => {
     expect(getByText('Sync All')).toBeTruthy();
   });
 
-  it('Sync All shows alert with "not yet implemented" message', () => {
-    const alertSpy = jest.spyOn(Alert, 'alert');
+  it('Sync All calls the sync engine and shows a summary alert', async () => {
+    mockSyncAllObservations.mockResolvedValue({ synced: 2, waitingForReview: 1, failed: 0 });
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     const { getByTestId } = render(<SyncScreen />);
 
     fireEvent.press(getByTestId('sync-all-button'));
 
-    expect(alertSpy).toHaveBeenCalledWith('Sync', 'Sync not yet implemented');
+    await waitFor(() => expect(mockSyncAllObservations).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(alertSpy).toHaveBeenCalledWith('Sync', '2 synced, 1 waiting on review'),
+    );
+  });
+
+  it('Sync All shows a generic message when there is nothing queued', async () => {
+    mockSyncAllObservations.mockResolvedValue({ synced: 0, waitingForReview: 0, failed: 0 });
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const { getByTestId } = render(<SyncScreen />);
+
+    fireEvent.press(getByTestId('sync-all-button'));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Sync', 'Nothing to sync'));
   });
 
   // ==========================================================================
@@ -198,20 +235,48 @@ describe('SyncScreen', () => {
     expect(queryByTestId('sync-retry-0')).toBeNull();
   });
 
-  it('retry button updates status to pending and increments retryCount', () => {
+  it('retry button re-attempts sync for that observation via the sync engine', async () => {
     const item = createSyncItem({
       observationId: 'obs-fail',
       status: 'failed',
       retryCount: 2,
     });
-    useWildlifeStore.setState({ syncQueue: [item] });
+    useWildlifeStore.setState({
+      syncQueue: [item],
+      observations: [createObservation({ id: 'obs-fail' })],
+    });
+    mockSyncObservation.mockResolvedValue({ observationId: 'obs-fail', status: 'synced', submittedCount: 1 });
 
     const { getByTestId } = render(<SyncScreen />);
     fireEvent.press(getByTestId('sync-retry-0'));
 
-    const updated = useWildlifeStore.getState().syncQueue[0];
-    expect(updated.status).toBe('pending');
-    expect(updated.retryCount).toBe(3);
+    await waitFor(() =>
+      expect(mockSyncObservation).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'obs-fail' }),
+      ),
+    );
+  });
+
+  it('retry button alerts with the failure message when the retry fails again', async () => {
+    const item = createSyncItem({ observationId: 'obs-fail', status: 'failed' });
+    useWildlifeStore.setState({
+      syncQueue: [item],
+      observations: [createObservation({ id: 'obs-fail' })],
+    });
+    mockSyncObservation.mockResolvedValue({
+      observationId: 'obs-fail',
+      status: 'failed',
+      submittedCount: 0,
+      message: 'blob upload failed: HTTP 500',
+    });
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+    const { getByTestId } = render(<SyncScreen />);
+    fireEvent.press(getByTestId('sync-retry-0'));
+
+    await waitFor(() =>
+      expect(alertSpy).toHaveBeenCalledWith('Sync failed', 'blob upload failed: HTTP 500'),
+    );
   });
 
   // ==========================================================================
