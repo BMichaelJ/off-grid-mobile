@@ -12,6 +12,7 @@ import type { MatchCandidate } from '../../types';
 import { toDisplayUri } from '../../utils/imageUri';
 import { CandidateCard } from './CandidateCard';
 import { createStyles } from './styles';
+import { usePackIndividualInfo } from './usePackIndividualInfo';
 
 type NavigationProp = NativeStackNavigationProp<
   RootStackParamList,
@@ -37,6 +38,7 @@ export const MatchReviewScreen: React.FC = () => {
     s.observations.find(o => o.id === observationId),
   );
   const localIndividuals = useWildlifeStore(s => s.localIndividuals);
+  const packs = useWildlifeStore(s => s.packs);
   const updateDetection = useWildlifeStore(s => s.updateDetection);
   const addLocalIndividual = useWildlifeStore(s => s.addLocalIndividual);
   const addEmbeddingToLocalIndividual = useWildlifeStore(
@@ -49,6 +51,7 @@ export const MatchReviewScreen: React.FC = () => {
   );
 
   const candidates = detection?.matchResult.topCandidates ?? [];
+  const packIndividualInfo = usePackIndividualInfo(candidates, packs);
 
   const resolvedCandidates: ResolvedCandidate[] = useMemo(() => {
     return candidates.map(candidate => {
@@ -65,16 +68,18 @@ export const MatchReviewScreen: React.FC = () => {
         };
       }
 
-      // Pack individual -- name resolution requires async file reads,
-      // so we display the ID for now. Task 5.2 will wire full resolution.
+      // Pack individual -- name and reference photo are resolved
+      // asynchronously above from the pack's embeddings/index.json; fall
+      // back to the raw ID until that resolves.
+      const info = packIndividualInfo[candidate.individualId];
       return {
         candidate,
-        name: candidate.individualId,
+        name: info?.name ?? candidate.individualId,
         displayId: candidate.individualId,
-        refPhotoUri: null,
+        refPhotoUri: info?.refPhotoUri ?? null,
       };
     });
-  }, [candidates, localIndividuals]);
+  }, [candidates, localIndividuals, packIndividualInfo]);
 
   const handleBack = useCallback(() => {
     navigation.goBack();

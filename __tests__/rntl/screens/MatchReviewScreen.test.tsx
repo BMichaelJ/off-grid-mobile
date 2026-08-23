@@ -17,7 +17,7 @@
  */
 
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
 // ---------------------------------------------------------------------------
 // Navigation mocks (must be before component import)
@@ -115,7 +115,9 @@ const mockUpdateDetection = jest.fn();
 const mockAddLocalIndividual = jest.fn();
 const mockAddEmbeddingToLocalIndividual = jest.fn();
 const mockGetNextFieldId = jest.fn(() => 'FIELD-001');
+const mockLoadPackIndex = jest.fn().mockResolvedValue([]);
 let mockObservations = [makeObservation()];
+let mockPacks: Array<Record<string, any>> = [];
 const mockLocalIndividuals = [
   {
     localId: 'ind-2',
@@ -133,6 +135,7 @@ const mockLocalIndividuals = [
 const mockGetState = () => ({
   observations: mockObservations,
   localIndividuals: mockLocalIndividuals,
+  packs: mockPacks,
   updateDetection: mockUpdateDetection,
   addLocalIndividual: mockAddLocalIndividual,
   addEmbeddingToLocalIndividual: mockAddEmbeddingToLocalIndividual,
@@ -148,6 +151,12 @@ jest.mock('../../../src/stores/wildlifeStore', () => {
   return { useWildlifeStore: hook };
 });
 
+jest.mock('../../../src/services/packManager', () => ({
+  packManager: {
+    loadPackIndex: (...args: any[]) => mockLoadPackIndex(...args),
+  },
+}));
+
 // ---------------------------------------------------------------------------
 // Import component under test
 // ---------------------------------------------------------------------------
@@ -159,7 +168,9 @@ import { MatchReviewScreen } from '../../../src/screens/MatchReviewScreen';
 describe('MatchReviewScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockLoadPackIndex.mockResolvedValue([]);
     mockObservations = [makeObservation()];
+    mockPacks = [];
   });
 
   // ==========================================================================
@@ -208,6 +219,43 @@ describe('MatchReviewScreen', () => {
   it('resolves local individual name from store', () => {
     const { getByText } = render(<MatchReviewScreen />);
     expect(getByText('Stripe Boy')).toBeTruthy();
+  });
+
+  it('resolves pack individual name and reference photo from the pack index', async () => {
+    mockPacks = [
+      {
+        id: 'proj_kariega',
+        species: 'zebra_plains',
+        referencePhotosDir: '/data/packs/proj_kariega/reference_photos',
+        indexFile: '/data/packs/proj_kariega/embeddings/index.json',
+      },
+    ];
+    mockLoadPackIndex.mockResolvedValue([
+      {
+        id: 'ind-1',
+        name: 'Thomas',
+        alternateId: null,
+        sex: 'male',
+        lifeStage: 'adult',
+        firstSeen: null,
+        lastSeen: null,
+        encounterCount: 5,
+        embeddingCount: 10,
+        embeddingOffset: 0,
+        referencePhotos: ['ref_01.jpg', 'ref_02.jpg'],
+        notes: null,
+      },
+    ]);
+
+    const { getByText, getByTestId } = render(<MatchReviewScreen />);
+
+    await waitFor(() => expect(getByText('Thomas')).toBeTruthy());
+    expect(mockLoadPackIndex).toHaveBeenCalledWith(
+      '/data/packs/proj_kariega/embeddings/index.json',
+    );
+    expect(getByTestId('candidate-photo-ind-1').props.source.uri).toBe(
+      'file:///data/packs/proj_kariega/reference_photos/ind-1/ref_01.jpg',
+    );
   });
 
   // ==========================================================================
