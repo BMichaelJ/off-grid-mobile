@@ -218,61 +218,6 @@ jest.mock('@react-navigation/native', () => {
 // Native Module Mocks
 // ============================================================================
 
-// llama.rn mock - use virtual mock since native module may not resolve
-jest.mock('llama.rn', () => ({
-  initLlama: jest.fn(() => Promise.resolve({
-    id: 'test-context-id',
-    gpu: false,
-    reasonNoGPU: 'Test environment',
-    model: {
-      nParams: 1000000,
-    },
-    release: jest.fn(() => Promise.resolve()),
-    completion: jest.fn(() => Promise.resolve({
-      text: 'Test completion response',
-      tokens_predicted: 10,
-      tokens_evaluated: 5,
-      timings: {
-        predicted_per_token_ms: 50,
-        predicted_per_second: 20,
-      },
-    })),
-    initMultimodal: jest.fn(() => Promise.resolve(true)),
-    getMultimodalSupport: jest.fn(() => Promise.resolve({ vision: false, audio: false })),
-  })),
-  releaseContext: jest.fn(() => Promise.resolve()),
-  completion: jest.fn(() => Promise.resolve({
-    text: 'Test completion response',
-    tokens_predicted: 10,
-    tokens_evaluated: 5,
-    timings: {
-      predicted_per_token_ms: 50,
-      predicted_per_second: 20,
-    },
-  })),
-  stopCompletion: jest.fn(() => Promise.resolve()),
-  tokenize: jest.fn(() => Promise.resolve({ tokens: [1, 2, 3] })),
-  detokenize: jest.fn(() => Promise.resolve({ text: 'detokenized' })),
-}), { virtual: true });
-
-// whisper.rn mock - use virtual mock since native module may not resolve
-jest.mock('whisper.rn', () => ({
-  initWhisper: jest.fn(() => Promise.resolve({
-    id: 'test-whisper-id',
-  })),
-  releaseWhisper: jest.fn(() => Promise.resolve()),
-  transcribeFile: jest.fn(() => Promise.resolve({
-    result: 'Transcribed text',
-    segments: [],
-  })),
-  transcribeRealtime: jest.fn(() => Promise.resolve()),
-  AudioSessionIos: {
-    setCategory: jest.fn(() => Promise.resolve()),
-    setMode: jest.fn(() => Promise.resolve()),
-    setActive: jest.fn(() => Promise.resolve()),
-  },
-}), { virtual: true });
-
 // onnxruntime-react-native mock - use virtual mock since native module may not resolve
 jest.mock('onnxruntime-react-native', () => ({
   InferenceSession: {
