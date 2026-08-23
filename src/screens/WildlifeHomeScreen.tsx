@@ -86,6 +86,13 @@ export const WildlifeHomeScreen: React.FC = () => {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>EleBook</Text>
+        <TouchableOpacity
+          style={styles.settingsButton}
+          onPress={() => navigation.navigate('Settings')}
+          testID="home-settings-button"
+        >
+          <Icon name="settings" size={22} color={colors.text} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -202,6 +209,9 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     backgroundColor: colors.background,
   },
   header: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
@@ -209,6 +219,9 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     backgroundColor: colors.surface,
     ...shadows.small,
     zIndex: 1,
+  },
+  settingsButton: {
+    padding: SPACING.xs,
   },
   title: {
     ...TYPOGRAPHY.h1,

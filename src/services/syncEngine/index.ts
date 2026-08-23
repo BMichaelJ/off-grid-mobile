@@ -1,7 +1,7 @@
+import RNFS from 'react-native-fs';
 import { GANESHA_PROJECT_ID } from '../../config/ganeshaApi';
 import { ganeshaApiClient } from '../ganeshaApiClient';
 import { useWildlifeStore } from '../../stores/wildlifeStore';
-import { toDisplayUri } from '../../utils/imageUri';
 import type { Detection, Observation } from '../../types';
 import logger from '../../utils/logger';
 import type { SyncAllResult, SyncObservationResult } from './types';
@@ -69,31 +69,40 @@ async function uploadDetectionPhoto(detection: Detection): Promise<{ blobUrl: st
     throw new Error(`upload-url request failed: ${uploadUrlResult.message}`);
   }
 
-  let blob: Blob;
+  // NOT `fetch(uri).blob()` -- React Native's fetch routes through the native
+  // OkHttp networking stack on Android, which does not support the `file://`
+  // scheme (produces a misleading "Network request failed", not a clear
+  // "unsupported scheme" error). RNFS.uploadFiles streams the file directly
+  // from disk; `binaryStreamOnly: true` sends the raw file bytes as the
+  // request body with no multipart wrapping, matching Azure Blob's PUT Blob
+  // contract (which requires the body to be exactly the blob's bytes).
+  let uploadResult: { statusCode: number };
   try {
-    const fileResponse = await fetch(toDisplayUri(detection.croppedImageUri));
-    blob = await fileResponse.blob();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`failed to read local photo for upload: ${message}`);
-  }
-
-  let putResponse: Response;
-  try {
-    putResponse = await fetch(uploadUrlResult.data.uploadUrl, {
+    const { promise } = RNFS.uploadFiles({
+      toUrl: uploadUrlResult.data.uploadUrl,
       method: 'PUT',
+      binaryStreamOnly: true,
+      files: [
+        {
+          name: 'file',
+          filename: `${detection.id}.jpg`,
+          filepath: detection.croppedImageUri,
+          filetype: 'image/jpeg',
+        },
+      ],
       headers: {
         'x-ms-blob-type': 'BlockBlob',
         'Content-Type': 'image/jpeg',
       },
-      body: blob,
     });
+    uploadResult = await promise;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`blob upload network error: ${message}`);
+    throw new Error(`blob upload failed: ${message}`);
   }
-  if (!putResponse.ok) {
-    throw new Error(`blob upload failed: HTTP ${putResponse.status}`);
+
+  if (uploadResult.statusCode < 200 || uploadResult.statusCode >= 300) {
+    throw new Error(`blob upload failed: HTTP ${uploadResult.statusCode}`);
   }
 
   return { blobUrl: uploadUrlResult.data.blobUrl };
@@ -211,7 +220,7 @@ export async function syncObservation(observation: Observation): Promise<SyncObs
  * already in flight for them) or `synced`.
  */
 export async function syncAllObservations(): Promise<SyncAllResult> {
-  const result: SyncAllResult = { synced: 0, waitingForReview: 0, failed: 0 };
+  const result: SyncAllResult = { synced: 0, uploaded: 0, waitingForReview: 0, failed: 0 };
   const { observations, syncQueue } = useWildlifeStore.getState();
 
   const queued = syncQueue.filter((item) => item.status === 'pending' || item.status === 'failed' || item.status === 'failedPermanent');
@@ -224,10 +233,12 @@ export async function syncAllObservations(): Promise<SyncAllResult> {
     const outcome = await syncObservation(observation);
     if (outcome.status === 'synced') {
       result.synced += 1;
+      result.uploaded += outcome.submittedCount;
     } else if (outcome.status === 'waiting-for-review') {
       result.waitingForReview += 1;
     } else {
       result.failed += 1;
+      result.uploaded += outcome.submittedCount;
     }
   }
 

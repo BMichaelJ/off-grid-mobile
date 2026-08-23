@@ -1,5 +1,6 @@
-import { GANESHA_API_BASE_URL, GANESHA_API_DEV_TOKEN } from '../../config/ganeshaApi';
+import { GANESHA_API_BASE_URL } from '../../config/ganeshaApi';
 import type {
+  CreateUserProfilePayload,
   GaneshaApiErrorCode,
   GaneshaApiResult,
   LatestModelInfo,
@@ -7,7 +8,9 @@ import type {
   SubmitObservationPayload,
   SubmitObservationResult,
   UploadUrlInfo,
+  UserProfile,
 } from './types';
+import { entraAuthService } from '../entraAuthService';
 import logger from '../../utils/logger';
 
 /**
@@ -18,10 +21,10 @@ import logger from '../../utils/logger';
  * ok/err result rather than throwing, matching modelDownloadService's
  * DownloadOutcome convention -- callers branch on `.ok`, never try/catch.
  *
- * Auth is the dev-token bearer shortcut until mobile-entra-auth (MSAL)
- * lands; the header injection point is centralized here so swapping in a
- * real Entra ID token later is a one-line change in request(), not a
- * per-call-site change.
+ * Auth is a real Entra ID access token from entraAuthService (which handles
+ * refresh transparently) -- the header injection point is centralized here
+ * so this is the only place that needs to change if the auth mechanism ever
+ * changes again.
  *
  * Uploading the image bytes themselves (a direct PUT to the blob SAS URL
  * `getUploadUrl` returns) is deliberately NOT part of this client -- that
@@ -57,17 +60,32 @@ class GaneshaApiClient {
     );
   }
 
+  /** Returns the signed-in user's Cosmos profile, or a `not-found` result if they haven't completed role selection yet. */
+  async getUserProfile(): Promise<GaneshaApiResult<UserProfile>> {
+    return this.request<UserProfile>('/users/profile');
+  }
+
+  /** Creates (first sign-in) or updates the signed-in user's Cosmos profile -- mirrors the web app's select-role step. */
+  async createUserProfile(payload: CreateUserProfilePayload): Promise<GaneshaApiResult<UserProfile>> {
+    return this.request<UserProfile>('/users/profile', { method: 'POST', body: payload });
+  }
+
   private async request<T>(
     path: string,
     init: { method?: 'GET' | 'POST'; body?: unknown } = {},
   ): Promise<GaneshaApiResult<T>> {
-    const authHeaderValue = ['Bearer', GANESHA_API_DEV_TOKEN].join(' ');
+    const accessToken = await entraAuthService.getValidAccessToken();
+    if (!accessToken) {
+      logger.warn(`[GaneshaApiClient] No valid session for ${path} -- sign-in is required.`);
+      return { ok: false, code: 'unauthenticated', message: 'Not signed in' };
+    }
+
     let response: Response;
     try {
       response = await fetch(`${GANESHA_API_BASE_URL}${path}`, {
         method: init.method ?? 'GET',
         headers: {
-          Authorization: authHeaderValue,
+          Authorization: ['Bearer', accessToken].join(' '),
           ...(init.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
         },
         ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
@@ -115,6 +133,8 @@ export type {
   UploadUrlInfo,
   SubmitObservationPayload,
   SubmitObservationResult,
+  UserProfile,
+  CreateUserProfilePayload,
   GaneshaApiResult,
   GaneshaApiErrorCode,
 } from './types';

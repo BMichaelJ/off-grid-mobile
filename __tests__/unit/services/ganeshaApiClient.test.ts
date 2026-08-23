@@ -1,6 +1,13 @@
-import { ganeshaApiClient } from '../../../src/services/ganeshaApiClient';
 import { GANESHA_API_BASE_URL } from '../../../src/config/ganeshaApi';
 
+jest.mock('../../../src/services/entraAuthService', () => ({
+  entraAuthService: { getValidAccessToken: jest.fn() },
+}));
+
+import { ganeshaApiClient } from '../../../src/services/ganeshaApiClient';
+import { entraAuthService } from '../../../src/services/entraAuthService';
+
+const mockGetValidAccessToken = entraAuthService.getValidAccessToken as jest.Mock;
 const mockFetch = jest.fn();
 globalThis.fetch = mockFetch as unknown as typeof fetch;
 
@@ -11,12 +18,37 @@ const jsonResponse = (status: number, body: unknown): Response =>
     json: () => Promise.resolve(body),
   }) as unknown as Response;
 
-describe('ganeshaApiClient.getLatestModel', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockGetValidAccessToken.mockResolvedValue('fake-access-token');
+});
+
+describe('ganeshaApiClient auth', () => {
+  it('sends the Entra access token as a Bearer header', async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse(200, {}));
+
+    await ganeshaApiClient.getLatestModel('miewid');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer fake-access-token' }),
+      }),
+    );
   });
 
-  it('returns parsed model info and authenticates with the dev-token header', async () => {
+  it('returns an unauthenticated result and never calls fetch when there is no valid session', async () => {
+    mockGetValidAccessToken.mockResolvedValue(null);
+
+    const result = await ganeshaApiClient.getLatestModel('miewid');
+
+    expect(result).toEqual({ ok: false, code: 'unauthenticated', message: 'Not signed in' });
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('ganeshaApiClient.getLatestModel', () => {
+  it('returns parsed model info', async () => {
     const body = {
       name: 'miewid',
       version: '4.1.0',
@@ -31,10 +63,7 @@ describe('ganeshaApiClient.getLatestModel', () => {
     expect(result).toEqual({ ok: true, data: body });
     expect(mockFetch).toHaveBeenCalledWith(
       `${GANESHA_API_BASE_URL}/models/miewid/latest`,
-      expect.objectContaining({
-        method: 'GET',
-        headers: { Authorization: 'Bearer dev-token' },
-      }),
+      expect.objectContaining({ method: 'GET' }),
     );
   });
 
@@ -95,10 +124,6 @@ describe('ganeshaApiClient.getLatestModel', () => {
 });
 
 describe('ganeshaApiClient.getLatestPack', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
   it('returns parsed pack info from the project-scoped endpoint', async () => {
     const body = {
       projectId: 'proj_kariega',
@@ -117,10 +142,7 @@ describe('ganeshaApiClient.getLatestPack', () => {
     expect(result).toEqual({ ok: true, data: body });
     expect(mockFetch).toHaveBeenCalledWith(
       `${GANESHA_API_BASE_URL}/projects/proj_kariega/packs/latest`,
-      expect.objectContaining({
-        method: 'GET',
-        headers: { Authorization: 'Bearer dev-token' },
-      }),
+      expect.objectContaining({ method: 'GET' }),
     );
   });
 
@@ -142,10 +164,6 @@ describe('ganeshaApiClient.getLatestPack', () => {
 });
 
 describe('ganeshaApiClient.getUploadUrl', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
   it('POSTs the filename and returns the upload/blob URLs', async () => {
     const body = {
       uploadUrl: 'https://ganeshasfc2o4rujo76u.blob.core.windows.net/elephant-images/proj_kariega/u1/x_det-1.jpg?sig=x',
@@ -160,10 +178,7 @@ describe('ganeshaApiClient.getUploadUrl', () => {
       `${GANESHA_API_BASE_URL}/projects/proj_kariega/upload-url`,
       expect.objectContaining({
         method: 'POST',
-        headers: expect.objectContaining({
-          Authorization: expect.stringMatching(/^Bearer /),
-          'Content-Type': 'application/json',
-        }),
+        headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ filename: 'det-1.jpg' }),
       }),
     );
@@ -179,10 +194,6 @@ describe('ganeshaApiClient.getUploadUrl', () => {
 });
 
 describe('ganeshaApiClient.submitObservation', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
   it('POSTs the submission payload and returns the created submission id', async () => {
     const body = { submissionId: 'sub-1', status: 'reviewing', imageUrl: 'https://example.com/signed.jpg' };
     mockFetch.mockResolvedValueOnce(jsonResponse(200, body));
@@ -206,10 +217,7 @@ describe('ganeshaApiClient.submitObservation', () => {
       `${GANESHA_API_BASE_URL}/projects/proj_kariega/submissions`,
       expect.objectContaining({
         method: 'POST',
-        headers: expect.objectContaining({
-          Authorization: expect.stringMatching(/^Bearer /),
-          'Content-Type': 'application/json',
-        }),
+        headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(payload),
       }),
     );
@@ -238,3 +246,67 @@ describe('ganeshaApiClient.submitObservation', () => {
   });
 });
 
+describe('ganeshaApiClient.getUserProfile', () => {
+  it('returns the profile on success', async () => {
+    const body = {
+      id: 'user-1',
+      userId: 'user-1',
+      email: 'a@b.com',
+      name: 'Alex',
+      role: 'researcher',
+      orgId: 'org_kariega',
+      approved: true,
+      badges: [],
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    };
+    mockFetch.mockResolvedValueOnce(jsonResponse(200, body));
+
+    const result = await ganeshaApiClient.getUserProfile();
+
+    expect(result).toEqual({ ok: true, data: body });
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${GANESHA_API_BASE_URL}/users/profile`,
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
+  it('maps a 404 (no profile yet) to a not-found result', async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse(404, { error: 'Profile not found' }));
+
+    const result = await ganeshaApiClient.getUserProfile();
+
+    expect(result).toEqual({ ok: false, code: 'not-found', message: 'HTTP 404', httpStatus: 404 });
+  });
+});
+
+describe('ganeshaApiClient.createUserProfile', () => {
+  it('POSTs the profile payload and returns the created/updated profile', async () => {
+    const body = {
+      id: 'user-1',
+      userId: 'user-1',
+      email: 'a@b.com',
+      name: 'Alex',
+      role: 'citizen',
+      orgId: 'org_kariega',
+      approved: false,
+      badges: [],
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    };
+    mockFetch.mockResolvedValueOnce(jsonResponse(200, body));
+
+    const payload = { name: 'Alex', role: 'citizen' as const, orgId: 'org_kariega' };
+    const result = await ganeshaApiClient.createUserProfile(payload);
+
+    expect(result).toEqual({ ok: true, data: body });
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${GANESHA_API_BASE_URL}/users/profile`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(payload),
+      }),
+    );
+  });
+});

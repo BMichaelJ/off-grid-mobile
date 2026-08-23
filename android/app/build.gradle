@@ -86,6 +86,15 @@ android {
         versionCode 1771958439
         versionName "0.0.58"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        // Consumed by react-native-app-auth's bundled RedirectUriReceiverActivity
+        // to catch the org.ganesha.elebook://oauthredirect callback from the
+        // system browser after Entra sign-in. Registered as a public client
+        // redirect URI on the ganesha-mobile-android Entra app registration.
+        // Not package-suffix-specific (scheme matching, not application id),
+        // so this one value covers both the debug (.dev) and release builds.
+        manifestPlaceholders = [
+            appAuthRedirectScheme: "org.ganesha.elebook"
+        ]
     }
     signingConfigs {
         debug {

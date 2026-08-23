@@ -12,6 +12,15 @@ export type SyncObservationResult = SyncObservationOutcome & { observationId: st
 /** Aggregate result of draining the whole sync queue (the "Sync All" action). */
 export interface SyncAllResult {
   synced: number;
+  /**
+   * Total detections actually uploaded across every synced observation --
+   * distinct from `synced` (a count of observations), since an observation
+   * can be marked "synced" with zero uploads (e.g. it had no elephant
+   * detections at all, so there was nothing to submit). Surfacing this
+   * separately avoids the misleading impression that every "synced"
+   * observation sent real data to the backend.
+   */
+  uploaded: number;
   waitingForReview: number;
   failed: number;
 }

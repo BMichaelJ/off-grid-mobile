@@ -50,8 +50,41 @@ export interface SubmitObservationResult {
   imageUrl: string | null;
 }
 
+/**
+ * `GET`/`POST /users/profile` (backend/function_app.py `get_user_profile` /
+ * `create_user_profile`). A `GET` 404 means the signed-in identity has no
+ * Cosmos profile yet -- the mobile app should route to a role-selection
+ * step and `POST` one, mirroring the web app's `select-role` page.
+ */
+export interface UserProfile {
+  id: string;
+  userId: string;
+  email: string;
+  name: string;
+  role: 'admin' | 'researcher' | 'citizen';
+  orgId: string;
+  approved: boolean;
+  badges: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateUserProfilePayload {
+  name: string;
+  role: 'researcher' | 'citizen';
+  orgId?: string;
+}
+
+/**
+ * `unauthenticated`: no valid local session at all (never signed in, or
+ * refresh failed) -- entraAuthService.getValidAccessToken() returned null,
+ * so the request was never even sent. Callers should route to sign-in.
+ * `unauthorized`: the backend itself rejected a token that was sent (401/403)
+ * -- a real server-side rejection, distinct from having no token locally.
+ */
 export type GaneshaApiErrorCode =
   | 'network-error'
+  | 'unauthenticated'
   | 'unauthorized'
   | 'not-found'
   | 'http-error'

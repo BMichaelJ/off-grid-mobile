@@ -25,6 +25,10 @@ jest.mock('../../../src/services/syncEngine', () => ({
   syncObservation: jest.fn(),
 }));
 
+jest.mock('../../../src/utils/authGate', () => ({
+  ensureSignedIn: jest.fn(),
+}));
+
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
@@ -63,9 +67,11 @@ jest.mock('react-native-vector-icons/Feather', () => {
 
 import { SyncScreen } from '../../../src/screens/SyncScreen';
 import { syncAllObservations, syncObservation } from '../../../src/services/syncEngine';
+import { ensureSignedIn } from '../../../src/utils/authGate';
 
 const mockSyncAllObservations = syncAllObservations as jest.Mock;
 const mockSyncObservation = syncObservation as jest.Mock;
+const mockEnsureSignedIn = ensureSignedIn as jest.Mock;
 
 // ---------------------------------------------------------------------------
 // Factory helper
@@ -109,6 +115,7 @@ describe('SyncScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     useWildlifeStore.setState({ syncQueue: [], observations: [] });
+    mockEnsureSignedIn.mockResolvedValue(true);
   });
 
   // ==========================================================================
@@ -136,7 +143,7 @@ describe('SyncScreen', () => {
   });
 
   it('Sync All calls the sync engine and shows a summary alert', async () => {
-    mockSyncAllObservations.mockResolvedValue({ synced: 2, waitingForReview: 1, failed: 0 });
+    mockSyncAllObservations.mockResolvedValue({ synced: 2, uploaded: 1, waitingForReview: 1, failed: 0 });
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     const { getByTestId } = render(<SyncScreen />);
 
@@ -144,12 +151,22 @@ describe('SyncScreen', () => {
 
     await waitFor(() => expect(mockSyncAllObservations).toHaveBeenCalled());
     await waitFor(() =>
-      expect(alertSpy).toHaveBeenCalledWith('Sync', '2 synced, 1 waiting on review'),
+      expect(alertSpy).toHaveBeenCalledWith('Sync', '2 up to date (1 uploaded), 1 waiting on review'),
     );
   });
 
+  it('does not sync when not signed in', async () => {
+    mockEnsureSignedIn.mockResolvedValue(false);
+    const { getByTestId } = render(<SyncScreen />);
+
+    fireEvent.press(getByTestId('sync-all-button'));
+
+    await waitFor(() => expect(mockEnsureSignedIn).toHaveBeenCalled());
+    expect(mockSyncAllObservations).not.toHaveBeenCalled();
+  });
+
   it('Sync All shows a generic message when there is nothing queued', async () => {
-    mockSyncAllObservations.mockResolvedValue({ synced: 0, waitingForReview: 0, failed: 0 });
+    mockSyncAllObservations.mockResolvedValue({ synced: 0, uploaded: 0, waitingForReview: 0, failed: 0 });
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     const { getByTestId } = render(<SyncScreen />);
 
@@ -255,6 +272,21 @@ describe('SyncScreen', () => {
         expect.objectContaining({ id: 'obs-fail' }),
       ),
     );
+  });
+
+  it('retry does not sync when not signed in', async () => {
+    mockEnsureSignedIn.mockResolvedValue(false);
+    const item = createSyncItem({ observationId: 'obs-fail', status: 'failed' });
+    useWildlifeStore.setState({
+      syncQueue: [item],
+      observations: [createObservation({ id: 'obs-fail' })],
+    });
+
+    const { getByTestId } = render(<SyncScreen />);
+    fireEvent.press(getByTestId('sync-retry-0'));
+
+    await waitFor(() => expect(mockEnsureSignedIn).toHaveBeenCalled());
+    expect(mockSyncObservation).not.toHaveBeenCalled();
   });
 
   it('retry button alerts with the failure message when the retry fails again', async () => {

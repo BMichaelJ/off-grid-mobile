@@ -43,6 +43,7 @@
     "patch-package": "^8.0.1",
     "react": "19.2.0",
     "react-native": "0.83.1",
+    "react-native-app-auth": "^8.4.1",
     "react-native-device-info": "^15.0.1",
     "react-native-fs": "^2.20.0",
     "react-native-gesture-handler": "^2.30.0",

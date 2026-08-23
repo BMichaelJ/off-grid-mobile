@@ -385,6 +385,15 @@ jest.mock('react-native-keychain', () => ({
   setGenericPassword: jest.fn(() => Promise.resolve(true)),
   getGenericPassword: jest.fn(() => Promise.resolve(false)),
   resetGenericPassword: jest.fn(() => Promise.resolve(true)),
+  ACCESSIBLE: {
+    WHEN_UNLOCKED: 'AccessibleWhenUnlocked',
+    AFTER_FIRST_UNLOCK: 'AccessibleAfterFirstUnlock',
+    ALWAYS: 'AccessibleAlways',
+    WHEN_PASSCODE_SET_THIS_DEVICE_ONLY: 'AccessibleWhenPasscodeSetThisDeviceOnly',
+    WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'AccessibleWhenUnlockedThisDeviceOnly',
+    AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: 'AccessibleAfterFirstUnlockThisDeviceOnly',
+    ALWAYS_THIS_DEVICE_ONLY: 'AccessibleAlwaysThisDeviceOnly',
+  },
 }));
 
 // @react-native-voice/voice mock

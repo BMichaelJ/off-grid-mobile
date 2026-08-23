@@ -112,14 +112,14 @@ describe('SettingsScreen', () => {
     const { getByText } = render(<SettingsScreen />);
     expect(getByText('Privacy First')).toBeTruthy();
     expect(
-      getByText(/All your data stays on this device/),
+      getByText(/captured and matched entirely on\s+this device/),
     ).toBeTruthy();
   });
 
   it('renders about section text', () => {
     const { getByText } = render(<SettingsScreen />);
     expect(getByText('Version')).toBeTruthy();
-    expect(getByText(/WildMe brings wildlife/)).toBeTruthy();
+    expect(getByText(/EleBook helps identify elephants/)).toBeTruthy();
   });
 
   it('renders Reset Onboarding button in __DEV__ mode', () => {

@@ -111,7 +111,9 @@ export const SettingsScreen: React.FC = () => {
               <Text style={styles.aboutValue}>{packageJson.version}</Text>
             </View>
             <Text style={styles.aboutText}>
-              WildMe brings wildlife re-identification to your device without compromising your privacy.
+              EleBook helps identify elephants in the field using on-device
+              AI, so it works fully offline -- no network connection needed
+              to capture, detect, or match a sighting.
             </Text>
           </Card>
         </AnimatedEntry>
@@ -124,8 +126,10 @@ export const SettingsScreen: React.FC = () => {
             </View>
             <Text style={styles.privacyTitle}>Privacy First</Text>
             <Text style={styles.privacyText}>
-              All your data stays on this device. No photos, observations, or
-              personal information is ever sent to any server without your consent.
+              Photos and observations are captured and matched entirely on
+              this device. They are only uploaded to the Ganesha project
+              backend when you sign in and sync -- nothing is sent
+              automatically or in the background.
             </Text>
           </Card>
         </AnimatedEntry>

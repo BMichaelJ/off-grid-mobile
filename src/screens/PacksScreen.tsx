@@ -16,6 +16,7 @@ import { GANESHA_PROJECT_ID } from '../config/ganeshaApi';
 import { resolveMiewidModelSource } from '../services/modelSourceResolver';
 import { acquireMiewidModel } from '../services/miewidModelManager';
 import { acquireLatestPack } from '../services/packDownloadService';
+import { ensureSignedIn } from '../utils/authGate';
 import logger from '../utils/logger';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -49,6 +50,10 @@ export const PacksScreen: React.FC = () => {
   };
 
   const handleDownloadPack = useCallback(async () => {
+    if (!(await ensureSignedIn(navigation))) {
+      return;
+    }
+
     setIsDownloading(true);
     try {
       // The MiewID model is a separate download from the pack -- only fetch
@@ -85,7 +90,7 @@ export const PacksScreen: React.FC = () => {
     } finally {
       setIsDownloading(false);
     }
-  }, [miewidModel]);
+  }, [miewidModel, navigation]);
 
   const renderPack = ({
     item,

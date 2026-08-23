@@ -26,6 +26,8 @@ import {
   ObservationsScreen,
   ObservationDetailScreen,
   SyncScreen,
+  SignInScreen,
+  SelectRoleScreen,
 } from '../screens';
 import type { RootStackParamList, MainTabParamList } from './types';
 
@@ -179,6 +181,8 @@ export const AppNavigator: React.FC = () => {
       <RootStack.Screen name="PackDetails" component={PackDetailScreen} />
       <RootStack.Screen name="Settings" component={SettingsScreen} />
       <RootStack.Screen name="SecuritySettings" component={SecuritySettingsScreen} />
+      <RootStack.Screen name="SignIn" component={SignInScreen} />
+      <RootStack.Screen name="SelectRole" component={SelectRoleScreen} />
     </RootStack.Navigator>
   );
 };

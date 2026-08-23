@@ -1,6 +1,8 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/Feather';
 import { Card } from '../components';
 import { useThemedStyles } from '../theme/useThemedStyles';
@@ -9,8 +11,12 @@ import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 import { useWildlifeStore } from '../stores/wildlifeStore';
 import type { SyncQueueItem, SyncStatus } from '../types/wildlife';
+import type { RootStackParamList } from '../navigation/types';
 import { syncAllObservations, syncObservation } from '../services/syncEngine';
+import { ensureSignedIn } from '../utils/authGate';
 import logger from '../utils/logger';
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 // ---------------------------------------------------------------------------
 // Status display helpers
@@ -51,6 +57,7 @@ function truncateId(id: string, maxLength = 12): string {
 export const SyncScreen: React.FC = () => {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
+  const navigation = useNavigation<NavigationProp>();
   const syncQueue = useWildlifeStore((s) => s.syncQueue);
   const observations = useWildlifeStore((s) => s.observations);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -60,11 +67,14 @@ export const SyncScreen: React.FC = () => {
     if (isSyncing) {
       return;
     }
+    if (!(await ensureSignedIn(navigation))) {
+      return;
+    }
     setIsSyncing(true);
     try {
       const result = await syncAllObservations();
       const parts: string[] = [];
-      if (result.synced > 0) parts.push(`${result.synced} synced`);
+      if (result.synced > 0) parts.push(`${result.synced} up to date (${result.uploaded} uploaded)`);
       if (result.waitingForReview > 0) parts.push(`${result.waitingForReview} waiting on review`);
       if (result.failed > 0) parts.push(`${result.failed} failed`);
       Alert.alert('Sync', parts.length > 0 ? parts.join(', ') : 'Nothing to sync');
@@ -74,11 +84,14 @@ export const SyncScreen: React.FC = () => {
     } finally {
       setIsSyncing(false);
     }
-  }, [isSyncing]);
+  }, [isSyncing, navigation]);
 
   const handleRetry = useCallback(
     async (item: SyncQueueItem) => {
       if (isSyncing || syncingObservationId) {
+        return;
+      }
+      if (!(await ensureSignedIn(navigation))) {
         return;
       }
       const observation = observations.find((obs) => obs.id === item.observationId);
@@ -99,7 +112,7 @@ export const SyncScreen: React.FC = () => {
         setSyncingObservationId(null);
       }
     },
-    [isSyncing, syncingObservationId, observations],
+    [isSyncing, syncingObservationId, observations, navigation],
   );
 
   const renderItem = useCallback(

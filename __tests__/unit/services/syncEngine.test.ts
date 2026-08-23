@@ -8,15 +8,19 @@ jest.mock('../../../src/services/ganeshaApiClient', () => ({
   ganeshaApiClient: { getUploadUrl: jest.fn(), submitObservation: jest.fn() },
 }));
 
+jest.mock('react-native-fs', () => ({
+  uploadFiles: jest.fn(),
+}));
+
 import { syncObservation, syncAllObservations } from '../../../src/services/syncEngine';
 import { useWildlifeStore } from '../../../src/stores/wildlifeStore';
 import { ganeshaApiClient } from '../../../src/services/ganeshaApiClient';
+import RNFS from 'react-native-fs';
 
 const mockGetState = useWildlifeStore.getState as jest.Mock;
 const mockGetUploadUrl = ganeshaApiClient.getUploadUrl as jest.Mock;
 const mockSubmitObservation = ganeshaApiClient.submitObservation as jest.Mock;
-const mockFetch = jest.fn();
-globalThis.fetch = mockFetch as unknown as typeof fetch;
+const mockUploadFiles = RNFS.uploadFiles as jest.Mock;
 
 // ---------------------------------------------------------------------------
 // Factory helpers
@@ -117,19 +121,17 @@ function installStore(initialObservations: Observation[], initialSyncQueue: Sync
   }));
 }
 
-/** Default fetch mock: PUT calls (blob upload) succeed; anything else returns a fake Blob. */
-function installHappyFetch(): void {
-  mockFetch.mockImplementation((_url: string, init?: RequestInit) => {
-    if (init?.method === 'PUT') {
-      return Promise.resolve({ ok: true, status: 200 } as unknown as Response);
-    }
-    return Promise.resolve({ blob: () => Promise.resolve({} as Blob) } as unknown as Response);
-  });
+/** Default RNFS.uploadFiles mock: the blob PUT succeeds with HTTP 200. */
+function installHappyUpload(): void {
+  mockUploadFiles.mockImplementation(() => ({
+    jobId: 1,
+    promise: Promise.resolve({ jobId: 1, statusCode: 200, headers: {}, body: '' }),
+  }));
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
-  installHappyFetch();
+  installHappyUpload();
   mockGetUploadUrl.mockResolvedValue({
     ok: true,
     data: { uploadUrl: 'https://blob.example/upload?sig=x', blobUrl: 'https://blob.example/final.jpg' },
@@ -165,6 +167,20 @@ describe('syncObservation', () => {
 
     expect(result).toEqual({ observationId: 'obs-1', status: 'synced', submittedCount: 1 });
     expect(mockGetUploadUrl).toHaveBeenCalledWith('proj_kariega', 'det-1.jpg');
+    expect(mockUploadFiles).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toUrl: 'https://blob.example/upload?sig=x',
+        method: 'PUT',
+        binaryStreamOnly: true,
+        files: [
+          expect.objectContaining({
+            filepath: '/data/crops/det-1.jpg',
+            filetype: 'image/jpeg',
+          }),
+        ],
+        headers: expect.objectContaining({ 'x-ms-blob-type': 'BlockBlob' }),
+      }),
+    );
     expect(mockSubmitObservation).toHaveBeenCalledWith(
       'proj_kariega',
       expect.objectContaining({
@@ -179,6 +195,33 @@ describe('syncObservation', () => {
     const finalQueueItem = syncQueue.find((i) => i.observationId === 'obs-1');
     expect(finalQueueItem?.status).toBe('synced');
     expect(finalQueueItem?.wildbookEncounterIds).toEqual(['sub-1']);
+  });
+
+  it('fails when the blob upload itself throws (e.g. a network error)', async () => {
+    mockUploadFiles.mockImplementation(() => ({
+      jobId: 1,
+      promise: Promise.reject(new Error('Network request failed')),
+    }));
+    installStore([makeObservation()], [makeSyncItem()]);
+
+    const result = await syncObservation(observations[0]);
+
+    expect(result.status).toBe('failed');
+    expect((result as { message: string }).message).toContain('blob upload failed');
+    expect(mockSubmitObservation).not.toHaveBeenCalled();
+  });
+
+  it('fails when the blob upload returns a non-2xx status code', async () => {
+    mockUploadFiles.mockImplementation(() => ({
+      jobId: 1,
+      promise: Promise.resolve({ jobId: 1, statusCode: 403, headers: {}, body: 'Forbidden' }),
+    }));
+    installStore([makeObservation()], [makeSyncItem()]);
+
+    const result = await syncObservation(observations[0]);
+
+    expect(result.status).toBe('failed');
+    expect((result as { message: string }).message).toContain('HTTP 403');
   });
 
   it('does not submit a detection approved against a local-only individual', async () => {
@@ -285,7 +328,7 @@ describe('syncAllObservations', () => {
 
     const result = await syncAllObservations();
 
-    expect(result).toEqual({ synced: 1, waitingForReview: 1, failed: 0 });
+    expect(result).toEqual({ synced: 1, uploaded: 1, waitingForReview: 1, failed: 0 });
     // The already-synced observation was never touched (no re-submit call for it).
     expect(mockSubmitObservation).toHaveBeenCalledTimes(1);
   });

@@ -167,6 +167,12 @@ describe('WildlifeHomeScreen', () => {
       fireEvent.press(getByTestId('capture-button'));
       expect(mockNavigate).toHaveBeenCalledWith('Capture');
     });
+
+    it('settings button navigates to Settings', () => {
+      const { getByTestId } = render(<WildlifeHomeScreen />);
+      fireEvent.press(getByTestId('home-settings-button'));
+      expect(mockNavigate).toHaveBeenCalledWith('Settings');
+    });
   });
 
   // ==========================================================================

@@ -80,14 +80,20 @@ jest.mock('../../../src/services/packDownloadService', () => ({
   acquireLatestPack: jest.fn(),
 }));
 
+jest.mock('../../../src/utils/authGate', () => ({
+  ensureSignedIn: jest.fn(),
+}));
+
 import { PacksScreen } from '../../../src/screens/PacksScreen';
 import { resolveMiewidModelSource } from '../../../src/services/modelSourceResolver';
 import { acquireMiewidModel } from '../../../src/services/miewidModelManager';
 import { acquireLatestPack } from '../../../src/services/packDownloadService';
+import { ensureSignedIn } from '../../../src/utils/authGate';
 
 const mockResolveMiewidModelSource = resolveMiewidModelSource as jest.Mock;
 const mockAcquireMiewidModel = acquireMiewidModel as jest.Mock;
 const mockAcquireLatestPack = acquireLatestPack as jest.Mock;
+const mockEnsureSignedIn = ensureSignedIn as jest.Mock;
 
 // ---------------------------------------------------------------------------
 // Factory helper
@@ -127,6 +133,7 @@ describe('PacksScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     useWildlifeStore.setState({ packs: [], miewidModel: null });
+    mockEnsureSignedIn.mockResolvedValue(true);
   });
 
   // ==========================================================================
@@ -320,6 +327,17 @@ describe('PacksScreen', () => {
       useWildlifeStore.setState({ packs: [createPack()] });
       rerender(<PacksScreen />);
       expect(queryByTestId('download-pack-button')).toBeNull();
+    });
+
+    it('does not start the download when not signed in', async () => {
+      mockEnsureSignedIn.mockResolvedValue(false);
+
+      const { getByTestId } = render(<PacksScreen />);
+      fireEvent.press(getByTestId('download-pack-button'));
+
+      await waitFor(() => expect(mockEnsureSignedIn).toHaveBeenCalled());
+      expect(mockResolveMiewidModelSource).not.toHaveBeenCalled();
+      expect(mockAcquireLatestPack).not.toHaveBeenCalled();
     });
 
     it('skips the model download when the MiewID model is already ready', async () => {
