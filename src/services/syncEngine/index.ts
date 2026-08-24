@@ -1,6 +1,7 @@
 import RNFS from 'react-native-fs';
 import { GANESHA_PROJECT_ID } from '../../config/ganeshaApi';
 import { ganeshaApiClient } from '../ganeshaApiClient';
+import { packManager } from '../packManager';
 import { useWildlifeStore } from '../../stores/wildlifeStore';
 import type { Detection, Observation } from '../../types';
 import logger from '../../utils/logger';
@@ -108,17 +109,48 @@ async function uploadDetectionPhoto(detection: Detection): Promise<{ blobUrl: st
   return { blobUrl: uploadUrlResult.data.blobUrl };
 }
 
+async function resolveApprovedIndividualName(
+  detection: Detection,
+): Promise<string | null> {
+  const approvedIndividual = detection.matchResult.approvedIndividual;
+  if (!approvedIndividual) {
+    return null;
+  }
+
+  for (const pack of useWildlifeStore.getState().packs) {
+    try {
+      const individuals = await packManager.loadPackIndex(pack.indexFile);
+      const individual = individuals.find(
+        (candidate) => candidate.id === approvedIndividual,
+      );
+      if (individual) {
+        return individual.name;
+      }
+    } catch (error) {
+      logger.warn(
+        `[SyncEngine] Failed to resolve individual names from pack ${pack.id}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
+  return null;
+}
+
 async function submitDetection(observation: Observation, detection: Detection): Promise<string> {
   const { blobUrl } = await uploadDetectionPhoto(detection);
   const approvedCandidate = detection.matchResult.topCandidates.find(
     (candidate) => candidate.individualId === detection.matchResult.approvedIndividual,
   );
+  const elephantName = await resolveApprovedIndividualName(detection);
 
   const submitResult = await ganeshaApiClient.submitObservation(GANESHA_PROJECT_ID, {
     imageUrl: blobUrl,
     // isPackMatch() (checked by the caller, eligibleDetections()) guarantees
     // approvedIndividual is set whenever a detection reaches this point.
     elephantId: detection.matchResult.approvedIndividual as string,
+    elephantName,
     confidence: approvedCandidate?.score ?? null,
     alternatives: detection.matchResult.topCandidates,
     lat: observation.gps?.lat ?? null,

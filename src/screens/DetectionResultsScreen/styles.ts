@@ -38,6 +38,23 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   footer: {
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
+    gap: SPACING.sm,
+  },
+  notesLabel: {
+    ...TYPOGRAPHY.labelSmall,
+    color: colors.textSecondary,
+  },
+  notesInput: {
+    minHeight: 72,
+    maxHeight: 120,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    color: colors.text,
+    backgroundColor: colors.surface,
+    textAlignVertical: 'top' as const,
   },
   saveAllButton: {
     backgroundColor: colors.primary,
@@ -52,6 +69,9 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   saveAllText: {
     ...TYPOGRAPHY.h2,
     color: colors.background,
+  },
+  saveAllButtonDisabled: {
+    opacity: 0.6,
   },
   // Bounding box styles
   boundingBox: {

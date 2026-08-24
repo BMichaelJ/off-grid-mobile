@@ -131,5 +131,22 @@ jobs:
       - name: Build Android Debug
         run: cd android && ./gradlew assembleDebug
 
+      - name: Create ephemeral CI signing key
+        run: |
+          keytool -genkeypair \
+            -keystore android/app/ci-release.keystore \
+            -storepass ci-only-password \
+            -keypass ci-only-password \
+            -alias elebook-ci \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 1 \
+            -dname "CN=EleBook CI, O=Project Ganesha, C=US"
+
       - name: Build Android Release
+        env:
+          ORG_GRADLE_PROJECT_ELEBOOK_RELEASE_STORE_FILE: ci-release.keystore
+          ORG_GRADLE_PROJECT_ELEBOOK_RELEASE_STORE_PASSWORD: ci-only-password
+          ORG_GRADLE_PROJECT_ELEBOOK_RELEASE_KEY_ALIAS: elebook-ci
+          ORG_GRADLE_PROJECT_ELEBOOK_RELEASE_KEY_PASSWORD: ci-only-password
         run: cd android && ./gradlew assembleRelease

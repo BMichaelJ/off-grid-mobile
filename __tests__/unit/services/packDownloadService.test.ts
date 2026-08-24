@@ -151,6 +151,7 @@ describe('acquireLatestPack', () => {
     }
     expect(result.pack).toMatchObject({
       id: PROJECT_ID,
+      packVersion: '2026-08-22T12:38:40Z',
       species: 'Loxodonta africana',
       featureClass: 'elephant+ear',
       displayName: 'Kariega Elephants',

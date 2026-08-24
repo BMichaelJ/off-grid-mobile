@@ -101,6 +101,7 @@ const mockEnsureSignedIn = ensureSignedIn as jest.Mock;
 
 const createPack = (overrides: Partial<EmbeddingPack> = {}): EmbeddingPack => ({
   id: 'pack-1',
+  packVersion: '2025-06-15T00:00:00Z',
   species: 'Megaptera novaeangliae',
   featureClass: 'fluke',
   displayName: 'Humpback Whale — Fluke',
@@ -129,11 +130,23 @@ const readyModel: MiewIDModelRecord = {
   verifiedAt: '2026-08-01T00:00:00.000Z',
 };
 
+const latestModelSource = {
+  name: 'miewid',
+  version: '4.1.0',
+  url: 'https://example/model.onnx',
+  expectedSha256: 'abc123',
+  expectedSizeBytes: 204_011_297,
+};
+
 describe('PacksScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     useWildlifeStore.setState({ packs: [], miewidModel: null });
     mockEnsureSignedIn.mockResolvedValue(true);
+    mockResolveMiewidModelSource.mockResolvedValue({
+      ok: true,
+      source: latestModelSource,
+    });
   });
 
   // ==========================================================================
@@ -340,7 +353,7 @@ describe('PacksScreen', () => {
       expect(mockAcquireLatestPack).not.toHaveBeenCalled();
     });
 
-    it('skips the model download when the MiewID model is already ready', async () => {
+    it('skips the model download when the installed model matches the latest artifact', async () => {
       useWildlifeStore.setState({ miewidModel: readyModel });
       mockAcquireLatestPack.mockResolvedValue({ ok: true, pack: createPack() });
 
@@ -350,21 +363,11 @@ describe('PacksScreen', () => {
       await waitFor(() =>
         expect(mockAcquireLatestPack).toHaveBeenCalledWith('proj_kariega'),
       );
-      expect(mockResolveMiewidModelSource).not.toHaveBeenCalled();
+      expect(mockResolveMiewidModelSource).toHaveBeenCalled();
       expect(mockAcquireMiewidModel).not.toHaveBeenCalled();
     });
 
     it('acquires the model first when it is not yet installed, then the pack', async () => {
-      mockResolveMiewidModelSource.mockResolvedValue({
-        ok: true,
-        source: {
-          name: 'miewid',
-          version: '4.1.0',
-          url: 'https://example/model.onnx',
-          expectedSha256: 'abc',
-          expectedSizeBytes: 100,
-        },
-      });
       mockAcquireMiewidModel.mockResolvedValue(readyModel);
       mockAcquireLatestPack.mockResolvedValue({ ok: true, pack: createPack() });
 
@@ -376,6 +379,26 @@ describe('PacksScreen', () => {
       );
       expect(mockResolveMiewidModelSource).toHaveBeenCalled();
       expect(mockAcquireMiewidModel).toHaveBeenCalled();
+    });
+
+    it('replaces a ready model when the latest artifact identity changed', async () => {
+      useWildlifeStore.setState({
+        miewidModel: {
+          ...readyModel,
+          version: '4.0.0',
+          sha256: 'old-hash',
+        },
+      });
+      mockAcquireMiewidModel.mockResolvedValue(readyModel);
+      mockAcquireLatestPack.mockResolvedValue({ ok: true, pack: createPack() });
+
+      const { getByTestId } = render(<PacksScreen />);
+      fireEvent.press(getByTestId('download-pack-button'));
+
+      await waitFor(() =>
+        expect(mockAcquireLatestPack).toHaveBeenCalledWith('proj_kariega'),
+      );
+      expect(mockAcquireMiewidModel).toHaveBeenCalledWith(latestModelSource);
     });
 
     it('alerts and stops when resolving the model source fails', async () => {
@@ -396,16 +419,6 @@ describe('PacksScreen', () => {
 
     it('alerts and stops when the model download does not end in ready status', async () => {
       const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-      mockResolveMiewidModelSource.mockResolvedValue({
-        ok: true,
-        source: {
-          name: 'miewid',
-          version: '4.1.0',
-          url: 'https://example/model.onnx',
-          expectedSha256: 'abc',
-          expectedSizeBytes: 100,
-        },
-      });
       mockAcquireMiewidModel.mockResolvedValue({
         ...readyModel,
         status: 'corrupt',

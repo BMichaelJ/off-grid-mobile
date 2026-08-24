@@ -119,6 +119,7 @@ export async function acquireLatestPack(
   const { manifest } = validation;
   const pack: EmbeddingPack = {
     id: projectId,
+    packVersion: info.version,
     species: manifest.species,
     featureClass: manifest.featureClass,
     displayName: info.displayName ?? manifest.displayName,

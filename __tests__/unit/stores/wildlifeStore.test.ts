@@ -19,7 +19,7 @@ import type {
   SyncQueueItem,
 } from '../../../src/types';
 
-// The four mutating actions are wrapped in jest.fn() that pass through to
+// The mutating actions are wrapped in jest.fn() that pass through to
 // the real (op-sqlite-mocked) implementation by default -- this lets the
 // "rollback on SQLite write failure" tests below override one call with
 // mockRejectedValueOnce, while every other test in this file keeps
@@ -29,6 +29,7 @@ jest.mock('../../../src/services/database', () => {
   return {
     ...actual,
     insertObservationWithDetections: jest.fn(actual.insertObservationWithDetections),
+    updateObservationNotes: jest.fn(actual.updateObservationNotes),
     updateDetectionFields: jest.fn(actual.updateDetectionFields),
     upsertSyncQueueItem: jest.fn(actual.upsertSyncQueueItem),
     updateSyncQueueFields: jest.fn(actual.updateSyncQueueFields),
@@ -41,6 +42,7 @@ jest.mock('../../../src/services/database', () => {
 
 const makePack = (overrides: Partial<EmbeddingPack> = {}): EmbeddingPack => ({
   id: 'pack-1',
+  packVersion: '2025-06-01T00:00:00Z',
   species: 'whale_shark',
   featureClass: 'right_dorsal_fin',
   displayName: 'Whale Shark - Right Dorsal Fin',
@@ -216,6 +218,24 @@ describe('wildlifeStore', () => {
       useWildlifeStore.getState().addObservation(makeObservation({ id: 'obs-2' }));
 
       expect(useWildlifeStore.getState().observations).toHaveLength(2);
+    });
+
+    it('updates observation notes in memory and SQLite', async () => {
+      await useWildlifeStore
+        .getState()
+        .addObservation(makeObservation({ id: 'obs-1', fieldNotes: null }));
+
+      await useWildlifeStore
+        .getState()
+        .updateObservationNotes('obs-1', 'Herd moving north');
+
+      expect(useWildlifeStore.getState().observations[0].fieldNotes).toBe(
+        'Herd moving north',
+      );
+      expect(database.updateObservationNotes).toHaveBeenCalledWith(
+        'obs-1',
+        'Herd moving north',
+      );
     });
   });
 
@@ -501,7 +521,7 @@ describe('wildlifeStore', () => {
   });
 
   // ========================================================================
-  // Persist migration (version 0 → 1)
+  // Persist migration
   // ========================================================================
   describe('persist migration', () => {
     it('migrates a legacy miewidModelPath string into a model record', async () => {
@@ -544,6 +564,22 @@ describe('wildlifeStore', () => {
       expect(useWildlifeStore.getState().miewidModel).toBeNull();
     });
 
+    it('adds an unknown artifact version to legacy packs', async () => {
+      const legacyPack = makePack();
+      const { packVersion: _packVersion, ...packWithoutVersion } = legacyPack;
+      await AsyncStorage.setItem(
+        'wildlife-store',
+        JSON.stringify({
+          state: { packs: [packWithoutVersion] },
+          version: 1,
+        }),
+      );
+
+      await useWildlifeStore.persist.rehydrate();
+
+      expect(useWildlifeStore.getState().packs[0].packVersion).toBe('unknown');
+    });
+
     it('rehydrates a current-version record unchanged', async () => {
       const record = {
         path: '/models/miewid-4.1.0.onnx',
@@ -556,7 +592,7 @@ describe('wildlifeStore', () => {
       };
       await AsyncStorage.setItem(
         'wildlife-store',
-        JSON.stringify({ state: { miewidModel: record }, version: 1 }),
+        JSON.stringify({ state: { miewidModel: record }, version: 2 }),
       );
 
       await useWildlifeStore.persist.rehydrate();
@@ -631,6 +667,25 @@ describe('wildlifeStore', () => {
       ).rejects.toThrow('disk full');
 
       expect(useWildlifeStore.getState().observations[0].detections[0].speciesConfidence).toBe(0.5);
+    });
+
+    it('updateObservationNotes restores previous notes if the SQLite write fails', async () => {
+      await useWildlifeStore
+        .getState()
+        .addObservation(makeObservation({ id: 'obs-1', fieldNotes: 'Original' }));
+      (database.updateObservationNotes as jest.Mock).mockRejectedValueOnce(
+        new Error('disk full'),
+      );
+
+      await expect(
+        useWildlifeStore
+          .getState()
+          .updateObservationNotes('obs-1', 'Replacement'),
+      ).rejects.toThrow('disk full');
+
+      expect(useWildlifeStore.getState().observations[0].fieldNotes).toBe(
+        'Original',
+      );
     });
 
     it('addToSyncQueue rolls back the item if the SQLite write fails', async () => {

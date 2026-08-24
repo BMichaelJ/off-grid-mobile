@@ -6,9 +6,7 @@ import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
-import org.ganesha.elebook.localdream.LocalDreamPackage
 import org.ganesha.elebook.imagetensor.ImageTensorPackage
-import org.ganesha.elebook.pdf.PDFExtractorPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -19,8 +17,6 @@ class MainApplication : Application(), ReactApplication {
         PackageList(this).packages.apply {
           // Packages that cannot be autolinked yet can be added manually here, for example:
           add(ImageTensorPackage())
-          add(LocalDreamPackage())
-          add(PDFExtractorPackage())
         },
     )
   }

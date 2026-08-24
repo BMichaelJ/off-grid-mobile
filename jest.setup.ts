@@ -278,6 +278,8 @@ jest.mock('react-native-device-info', () => ({
   isEmulator: jest.fn(() => Promise.resolve(false)),
   getDeviceId: jest.fn(() => 'test-device-id'),
   getHardware: jest.fn(() => Promise.resolve('unknown')),
+  getVersion: jest.fn(() => '0.1.0-field.1'),
+  getBuildNumber: jest.fn(() => '1787551542'),
 }));
 
 // react-native-image-picker mock
@@ -338,47 +340,6 @@ jest.mock('react-native-keychain', () => ({
     WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'AccessibleWhenUnlockedThisDeviceOnly',
     AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: 'AccessibleAfterFirstUnlockThisDeviceOnly',
     ALWAYS_THIS_DEVICE_ONLY: 'AccessibleAlwaysThisDeviceOnly',
-  },
-}));
-
-// @react-native-voice/voice mock
-jest.mock('@react-native-voice/voice', () => ({
-  start: jest.fn(() => Promise.resolve()),
-  stop: jest.fn(() => Promise.resolve()),
-  destroy: jest.fn(() => Promise.resolve()),
-  isAvailable: jest.fn(() => Promise.resolve(true)),
-  onSpeechStart: null,
-  onSpeechEnd: null,
-  onSpeechResults: null,
-  onSpeechError: null,
-}));
-
-// @react-native-documents/picker mock
-jest.mock('@react-native-documents/picker', () => ({
-  pick: jest.fn(() => Promise.resolve([{
-    uri: 'file:///mock/document.txt',
-    name: 'document.txt',
-    type: 'text/plain',
-    size: 1234,
-  }])),
-  types: {
-    allFiles: '*/*',
-    plainText: 'text/plain',
-    csv: 'text/csv',
-    pdf: 'application/pdf',
-  },
-  isErrorWithCode: jest.fn(() => false),
-  errorCodes: {
-    OPERATION_CANCELED: 'OPERATION_CANCELED',
-  },
-}));
-
-// @react-native-documents/viewer mock
-jest.mock('@react-native-documents/viewer', () => ({
-  viewDocument: jest.fn(() => Promise.resolve(null)),
-  isErrorWithCode: jest.fn(() => false),
-  errorCodes: {
-    UNABLE_TO_OPEN: 'UNABLE_TO_OPEN',
   },
 }));
 
@@ -447,25 +408,6 @@ jest.mock('react-native-reanimated', () => {
 jest.mock('react-native-haptic-feedback', () => ({
   trigger: jest.fn(),
 }));
-
-// @react-native-community/blur mock
-jest.mock('@react-native-community/blur', () => ({
-  BlurView: 'BlurView',
-}));
-
-// lottie-react-native mock
-jest.mock('lottie-react-native', () => 'LottieView');
-
-// react-native-linear-gradient mock
-jest.mock('react-native-linear-gradient', () => 'LinearGradient');
-
-// moti mock (kept for any transitive imports)
-jest.mock('moti', () => ({
-  MotiView: 'MotiView',
-  MotiText: 'MotiText',
-  MotiImage: 'MotiImage',
-  AnimatePresence: ({ children }: { children: React.ReactNode }) => children,
-}), { virtual: true });
 
 // react-native-zip-archive mock
 jest.mock('react-native-zip-archive', () => ({

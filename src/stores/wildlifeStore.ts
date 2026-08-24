@@ -12,6 +12,7 @@ import type {
 } from '../types';
 import {
   insertObservationWithDetections,
+  updateObservationNotes,
   updateDetectionFields,
   upsertSyncQueueItem,
   updateSyncQueueFields,
@@ -51,6 +52,10 @@ interface WildlifeState {
 
   // Observation actions (durably persisted to SQLite -- see above)
   addObservation: (observation: Observation) => Promise<void>;
+  updateObservationNotes: (
+    observationId: string,
+    fieldNotes: string | null,
+  ) => Promise<void>;
   updateDetection: (
     observationId: string,
     detectionId: string,
@@ -133,6 +138,37 @@ export const useWildlifeStore = create<WildlifeState>()(
           }));
           throw error;
         });
+      },
+
+      updateObservationNotes: (observationId, fieldNotes) => {
+        const previousObservation = get().observations.find(
+          (observation) => observation.id === observationId,
+        );
+        set((state) => ({
+          observations: state.observations.map((observation) =>
+            observation.id === observationId
+              ? { ...observation, fieldNotes }
+              : observation,
+          ),
+        }));
+        return updateObservationNotes(observationId, fieldNotes).catch(
+          (error) => {
+            logger.error(
+              '[wildlifeStore] Failed to persist observation notes to SQLite -- rolling back in-memory state:',
+              error,
+            );
+            if (previousObservation) {
+              set((state) => ({
+                observations: state.observations.map((observation) =>
+                  observation.id === observationId
+                    ? previousObservation
+                    : observation,
+                ),
+              }));
+            }
+            throw error;
+          },
+        );
       },
 
       updateDetection: (observationId, detectionId, updates) => {
@@ -247,7 +283,7 @@ export const useWildlifeStore = create<WildlifeState>()(
     {
       name: 'wildlife-store',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 1,
+      version: 2,
       migrate: (persisted, fromVersion) => {
         const state = persisted as Record<string, unknown>;
         if (fromVersion < 1) {
@@ -267,6 +303,15 @@ export const useWildlifeStore = create<WildlifeState>()(
               } satisfies MiewIDModelRecord)
             : null;
           delete state.miewidModelPath;
+        }
+        if (fromVersion < 2) {
+          const legacyPacks = Array.isArray(state.packs)
+            ? (state.packs as EmbeddingPack[])
+            : [];
+          state.packs = legacyPacks.map((pack) => ({
+            ...pack,
+            packVersion: pack.packVersion ?? 'unknown',
+          }));
         }
         return state;
       },

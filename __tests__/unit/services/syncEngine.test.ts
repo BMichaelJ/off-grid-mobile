@@ -8,6 +8,10 @@ jest.mock('../../../src/services/ganeshaApiClient', () => ({
   ganeshaApiClient: { getUploadUrl: jest.fn(), submitObservation: jest.fn() },
 }));
 
+jest.mock('../../../src/services/packManager', () => ({
+  packManager: { loadPackIndex: jest.fn() },
+}));
+
 jest.mock('react-native-fs', () => ({
   uploadFiles: jest.fn(),
 }));
@@ -15,11 +19,13 @@ jest.mock('react-native-fs', () => ({
 import { syncObservation, syncAllObservations } from '../../../src/services/syncEngine';
 import { useWildlifeStore } from '../../../src/stores/wildlifeStore';
 import { ganeshaApiClient } from '../../../src/services/ganeshaApiClient';
+import { packManager } from '../../../src/services/packManager';
 import RNFS from 'react-native-fs';
 
 const mockGetState = useWildlifeStore.getState as jest.Mock;
 const mockGetUploadUrl = ganeshaApiClient.getUploadUrl as jest.Mock;
 const mockSubmitObservation = ganeshaApiClient.submitObservation as jest.Mock;
+const mockLoadPackIndex = packManager.loadPackIndex as jest.Mock;
 const mockUploadFiles = RNFS.uploadFiles as jest.Mock;
 
 // ---------------------------------------------------------------------------
@@ -118,6 +124,12 @@ function installStore(initialObservations: Observation[], initialSyncQueue: Sync
     },
     updateSyncStatus,
     updateDetection,
+    packs: [
+      {
+        id: 'proj_kariega',
+        indexFile: '/data/packs/proj_kariega/embeddings/index.json',
+      },
+    ],
   }));
 }
 
@@ -140,6 +152,13 @@ beforeEach(() => {
     ok: true,
     data: { submissionId: 'sub-1', status: 'reviewing', imageUrl: 'https://blob.example/signed.jpg' },
   });
+  mockLoadPackIndex.mockResolvedValue([
+    {
+      id: 'elephant-thomas',
+      name: 'Thomas',
+      referencePhotos: ['ref_01.jpg'],
+    },
+  ]);
 });
 
 // ---------------------------------------------------------------------------
@@ -186,6 +205,7 @@ describe('syncObservation', () => {
       expect.objectContaining({
         imageUrl: 'https://blob.example/final.jpg',
         elephantId: 'elephant-thomas',
+        elephantName: 'Thomas',
         confidence: 0.95,
         lat: -33.5,
         long: 26.9,
@@ -195,6 +215,19 @@ describe('syncObservation', () => {
     const finalQueueItem = syncQueue.find((i) => i.observationId === 'obs-1');
     expect(finalQueueItem?.status).toBe('synced');
     expect(finalQueueItem?.wildbookEncounterIds).toEqual(['sub-1']);
+  });
+
+  it('still submits when pack display-name resolution fails', async () => {
+    mockLoadPackIndex.mockRejectedValueOnce(new Error('pack index unreadable'));
+    installStore([makeObservation()], [makeSyncItem()]);
+
+    const result = await syncObservation(observations[0]);
+
+    expect(result.status).toBe('synced');
+    expect(mockSubmitObservation).toHaveBeenCalledWith(
+      'proj_kariega',
+      expect.objectContaining({ elephantName: null }),
+    );
   });
 
   it('fails when the blob upload itself throws (e.g. a network error)', async () => {

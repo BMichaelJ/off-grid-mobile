@@ -81,6 +81,7 @@ export interface DetectorConfig {
 
 export interface EmbeddingPack {
   id: string;
+  packVersion: string;
   species: string;
   featureClass: string;
   displayName: string;

@@ -220,6 +220,7 @@ describe('PackManager', () => {
 
     const makeStoredPack = (overrides: Record<string, unknown> = {}) => ({
       id: 'pack-1',
+      packVersion: '2026-04-25T00:00:00Z',
       species: 'horse',
       featureClass: 'horse_wild+face',
       displayName: 'Horses',

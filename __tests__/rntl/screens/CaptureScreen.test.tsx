@@ -115,6 +115,7 @@ const MOCK_GPS = {
 
 const makeTestPack = (overrides: Record<string, unknown> = {}) => ({
   id: 'pack-1',
+  packVersion: '2026-04-25T00:00:00Z',
   species: 'horse_wild',
   featureClass: 'face',
   displayName: 'Wild Horse - Face',
@@ -572,6 +573,25 @@ describe('CaptureScreen', () => {
     const call = (wildlifePipeline.processPhoto as jest.Mock).mock.calls[0][0];
     expect(call.speciesConfigs).toHaveLength(1);
     expect(call.speciesConfigs[0].packId).toBe('pack-compatible');
+  });
+
+  it('blocks identification when every pack has a different model version', async () => {
+    useWildlifeStore.setState({
+      packs: [
+        makeTestPack({ embeddingModelVersion: '4.1.1' }),
+      ],
+    });
+
+    const { getByTestId } = render(<CaptureScreen />);
+    fireEvent.press(getByTestId('take-photo-button'));
+
+    await waitFor(() => {
+      expect(Alert.alert).toHaveBeenCalledWith(
+        'Model and pack versions do not match',
+        expect.stringContaining('4.1.0'),
+      );
+    });
+    expect(wildlifePipeline.processPhoto).not.toHaveBeenCalled();
   });
 
   // ==========================================================================

@@ -87,6 +87,17 @@ export async function listObservationsWithDetections(): Promise<Observation[]> {
   );
 }
 
+export async function updateObservationNotes(
+  observationId: string,
+  fieldNotes: string | null,
+): Promise<void> {
+  const database = getDb();
+  await database.execute(
+    'UPDATE observations SET field_notes = ? WHERE id = ?;',
+    [fieldNotes, observationId],
+  );
+}
+
 /**
  * Applies a partial update to one detection. Only columns whose top-level
  * key is present in `updates` are touched -- e.g. passing just

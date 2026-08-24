@@ -14,7 +14,8 @@
  */
 
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { Alert } from 'react-native';
 
 // ---------------------------------------------------------------------------
 // Navigation mocks (must be before component import)
@@ -97,10 +98,14 @@ const makeObservation = (
 });
 
 let mockObservations = [makeObservation()];
+const mockUpdateObservationNotes = jest.fn(() => Promise.resolve());
 
 jest.mock('../../../src/stores/wildlifeStore', () => ({
   useWildlifeStore: jest.fn((selector?: any) => {
-    const state = { observations: mockObservations };
+    const state = {
+      observations: mockObservations,
+      updateObservationNotes: mockUpdateObservationNotes,
+    };
     return selector ? selector(state) : state;
   }),
 }));
@@ -116,6 +121,7 @@ import { DetectionResultsScreen } from '../../../src/screens/DetectionResultsScr
 describe('DetectionResultsScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUpdateObservationNotes.mockResolvedValue(undefined);
     mockObservations = [makeObservation()];
   });
 
@@ -182,16 +188,42 @@ describe('DetectionResultsScreen', () => {
   // Navigation
   // ==========================================================================
 
-  it('navigates to MatchReview when bounding box tapped', () => {
+  it('persists notes before navigating to MatchReview', async () => {
     mockObservations = [makeObservation([makeDetection({ id: 'det-1' })])];
 
     const { getByTestId } = render(<DetectionResultsScreen />);
+    fireEvent.changeText(
+      getByTestId('observation-notes-input'),
+      '  Herd moving north  ',
+    );
     fireEvent.press(getByTestId('bounding-box-det-1'));
 
-    expect(mockNavigate).toHaveBeenCalledWith('MatchReview', {
-      observationId: 'obs-1',
-      detectionId: 'det-1',
+    await waitFor(() => {
+      expect(mockUpdateObservationNotes).toHaveBeenCalledWith(
+        'obs-1',
+        'Herd moving north',
+      );
+      expect(mockNavigate).toHaveBeenCalledWith('MatchReview', {
+        observationId: 'obs-1',
+        detectionId: 'det-1',
+      });
     });
+  });
+
+  it('does not open MatchReview when notes fail to persist', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    mockUpdateObservationNotes.mockRejectedValueOnce(new Error('disk full'));
+    const { getByTestId } = render(<DetectionResultsScreen />);
+
+    fireEvent.press(getByTestId('bounding-box-det-1'));
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Could not save observation',
+        'disk full',
+      );
+    });
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 
   // ==========================================================================
@@ -203,10 +235,52 @@ describe('DetectionResultsScreen', () => {
     expect(getByText('Save All')).toBeTruthy();
   });
 
-  it('navigates back when Save All is pressed', () => {
+  it('shows an optional observation notes field', () => {
+    const { getByTestId, getByText } = render(<DetectionResultsScreen />);
+
+    expect(getByText('Observation notes')).toBeTruthy();
+    expect(getByTestId('observation-notes-input')).toBeTruthy();
+  });
+
+  it('persists trimmed notes before navigating back', async () => {
+    const { getByTestId } = render(<DetectionResultsScreen />);
+    fireEvent.changeText(
+      getByTestId('observation-notes-input'),
+      '  Herd moving north  ',
+    );
+    fireEvent.press(getByTestId('save-all-button'));
+
+    await waitFor(() => {
+      expect(mockUpdateObservationNotes).toHaveBeenCalledWith(
+        'obs-1',
+        'Herd moving north',
+      );
+    });
+    expect(mockGoBack).toHaveBeenCalled();
+  });
+
+  it('persists blank notes as null', async () => {
+    const { getByTestId } = render(<DetectionResultsScreen />);
+    fireEvent.changeText(getByTestId('observation-notes-input'), '   ');
+    fireEvent.press(getByTestId('save-all-button'));
+
+    await waitFor(() => {
+      expect(mockUpdateObservationNotes).toHaveBeenCalledWith('obs-1', null);
+    });
+  });
+
+  it('does not navigate back when notes fail to persist', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    mockUpdateObservationNotes.mockRejectedValueOnce(new Error('disk full'));
     const { getByTestId } = render(<DetectionResultsScreen />);
     fireEvent.press(getByTestId('save-all-button'));
 
-    expect(mockGoBack).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Could not save observation',
+        'disk full',
+      );
+    });
+    expect(mockGoBack).not.toHaveBeenCalled();
   });
 });

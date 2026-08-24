@@ -1,5 +1,13 @@
-import React, { useCallback } from 'react';
-import { View, Text, Image, TouchableOpacity } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -37,23 +45,52 @@ export const DetectionResultsScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<DetectionResultsRouteProp>();
   const { observationId } = route.params;
+  const [isSaving, setIsSaving] = useState(false);
 
   const observation = useWildlifeStore(s =>
     s.observations.find(o => o.id === observationId),
   );
+  const updateObservationNotes = useWildlifeStore(
+    s => s.updateObservationNotes,
+  );
+  const [notes, setNotes] = useState(observation?.fieldNotes ?? '');
 
   const detections = observation?.detections ?? [];
 
+  const persistNotes = useCallback(async () => {
+    await updateObservationNotes(observationId, notes.trim() || null);
+  }, [notes, observationId, updateObservationNotes]);
+
   const handleBoxPress = useCallback(
-    (detectionId: string) => {
+    async (detectionId: string) => {
+      try {
+        await persistNotes();
+      } catch (error) {
+        Alert.alert(
+          'Could not save observation',
+          error instanceof Error ? error.message : String(error),
+        );
+        return;
+      }
       navigation.navigate('MatchReview', { observationId, detectionId });
     },
-    [navigation, observationId],
+    [navigation, observationId, persistNotes],
   );
 
-  const handleSaveAll = useCallback(() => {
-    navigation.goBack();
-  }, [navigation]);
+  const handleSaveAll = useCallback(async () => {
+    setIsSaving(true);
+    try {
+      await persistNotes();
+      navigation.goBack();
+    } catch (error) {
+      Alert.alert(
+        'Could not save observation',
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  }, [navigation, persistNotes]);
 
   const handleBack = useCallback(() => {
     navigation.goBack();
@@ -100,13 +137,35 @@ export const DetectionResultsScreen: React.FC = () => {
       </View>
 
       <View style={styles.footer}>
+        <Text style={styles.notesLabel}>Observation notes</Text>
+        <TextInput
+          value={notes}
+          onChangeText={setNotes}
+          placeholder="Optional field notes"
+          placeholderTextColor={colors.textMuted}
+          style={styles.notesInput}
+          multiline
+          maxLength={2000}
+          editable={!isSaving}
+          testID="observation-notes-input"
+        />
         <TouchableOpacity
-          style={styles.saveAllButton}
+          style={[
+            styles.saveAllButton,
+            isSaving && styles.saveAllButtonDisabled,
+          ]}
           onPress={handleSaveAll}
+          disabled={isSaving}
           testID="save-all-button"
         >
-          <Icon name="check-circle" size={20} color={colors.background} />
-          <Text style={styles.saveAllText}>Save All</Text>
+          {isSaving ? (
+            <ActivityIndicator color={colors.background} />
+          ) : (
+            <>
+              <Icon name="check-circle" size={20} color={colors.background} />
+              <Text style={styles.saveAllText}>Save All</Text>
+            </>
+          )}
         </TouchableOpacity>
       </View>
     </SafeAreaView>

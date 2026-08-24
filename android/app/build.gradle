@@ -60,6 +60,35 @@ react {
  */
 def enableProguardInReleaseBuilds = false
 
+def releaseSigningProperties = [
+    'ELEBOOK_RELEASE_STORE_FILE',
+    'ELEBOOK_RELEASE_STORE_PASSWORD',
+    'ELEBOOK_RELEASE_KEY_ALIAS',
+    'ELEBOOK_RELEASE_KEY_PASSWORD',
+]
+def missingReleaseSigningProperties = releaseSigningProperties.findAll {
+    !project.hasProperty(it) || project.property(it).toString().trim().isEmpty()
+}
+def releaseTaskRequested = gradle.startParameter.taskNames.any {
+    it.toLowerCase().contains('release')
+}
+
+if (releaseTaskRequested && !missingReleaseSigningProperties.isEmpty()) {
+    throw new GradleException(
+        "Release signing is required. Missing Gradle properties: " +
+        missingReleaseSigningProperties.join(', ')
+    )
+}
+
+if (releaseTaskRequested) {
+    def releaseStoreFile = file(project.property('ELEBOOK_RELEASE_STORE_FILE'))
+    if (!releaseStoreFile.exists()) {
+        throw new GradleException(
+            "Release keystore does not exist: ${releaseStoreFile.absolutePath}"
+        )
+    }
+}
+
 /**
  * The preferred build flavor of JavaScriptCore (JSC)
  *
@@ -83,8 +112,8 @@ android {
         applicationId "org.ganesha.elebook"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1771958439
-        versionName "0.0.58"
+        versionCode 1787551542
+        versionName "0.1.0-field.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         // Consumed by react-native-app-auth's bundled RedirectUriReceiverActivity
         // to catch the org.ganesha.elebook://oauthredirect callback from the
@@ -104,7 +133,7 @@ android {
             keyPassword 'android'
         }
         release {
-            if (project.hasProperty('ELEBOOK_RELEASE_STORE_FILE')) {
+            if (missingReleaseSigningProperties.isEmpty()) {
                 storeFile file(ELEBOOK_RELEASE_STORE_FILE)
                 storePassword ELEBOOK_RELEASE_STORE_PASSWORD
                 keyAlias ELEBOOK_RELEASE_KEY_ALIAS
@@ -126,7 +155,9 @@ android {
             applicationIdSuffix ".dev"
         }
         release {
-            signingConfig signingConfigs.release.storeFile ? signingConfigs.release : signingConfigs.debug
+            if (missingReleaseSigningProperties.isEmpty()) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
@@ -151,12 +182,6 @@ dependencies {
     } else {
         implementation jscFlavor
     }
-
-    // Coroutines for async operations (used by LocalDreamModule)
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-
-    // PDF text extraction (used by PDFExtractorModule)
-    implementation("io.legere:pdfiumandroid:1.0.35")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.13")

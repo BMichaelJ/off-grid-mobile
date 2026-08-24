@@ -9,6 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import DeviceInfo from 'react-native-device-info';
 import { Card } from '../components';
 import { AnimatedEntry } from '../components/AnimatedEntry';
 import { AnimatedListItem } from '../components/AnimatedListItem';
@@ -16,9 +17,8 @@ import { useFocusTrigger } from '../hooks/useFocusTrigger';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
-import { useAppStore } from '../stores';
+import { useAppStore, useWildlifeStore } from '../stores';
 import { SettingsStackParamList } from '../navigation/types';
-import packageJson from '../../package.json';
 
 type NavigationProp = NativeStackNavigationProp<SettingsStackParamList, 'SettingsMain'>;
 
@@ -30,6 +30,8 @@ export const SettingsScreen: React.FC = () => {
   const setOnboardingComplete = useAppStore((s) => s.setOnboardingComplete);
   const themeMode = useAppStore((s) => s.themeMode);
   const setThemeMode = useAppStore((s) => s.setThemeMode);
+  const miewidModel = useWildlifeStore((s) => s.miewidModel);
+  const packs = useWildlifeStore((s) => s.packs);
 
   const handleResetOnboarding = () => {
     setOnboardingComplete(false);
@@ -107,9 +109,30 @@ export const SettingsScreen: React.FC = () => {
         <AnimatedEntry index={2} staggerMs={40} trigger={focusTrigger}>
           <Card style={styles.section}>
             <View style={styles.aboutRow}>
-              <Text style={styles.aboutLabel}>Version</Text>
-              <Text style={styles.aboutValue}>{packageJson.version}</Text>
+              <Text style={styles.aboutLabel}>App version</Text>
+              <Text style={styles.aboutValue}>
+                {DeviceInfo.getVersion()} ({DeviceInfo.getBuildNumber()})
+              </Text>
             </View>
+            <View style={styles.aboutRow}>
+              <Text style={styles.aboutLabel}>MiewID model</Text>
+              <Text style={styles.aboutValue}>
+                {miewidModel?.version ?? 'Not installed'}
+              </Text>
+            </View>
+            {packs.length === 0 ? (
+              <View style={styles.aboutRow}>
+                <Text style={styles.aboutLabel}>Embedding pack</Text>
+                <Text style={styles.aboutValue}>Not installed</Text>
+              </View>
+            ) : (
+              packs.map((pack) => (
+                <View key={pack.id} style={styles.aboutRow}>
+                  <Text style={styles.aboutLabel}>{pack.displayName}</Text>
+                  <Text style={styles.aboutValue}>{pack.packVersion}</Text>
+                </View>
+              ))
+            )}
             <Text style={styles.aboutText}>
               EleBook helps identify elephants in the field using on-device
               AI, so it works fully offline -- no network connection needed

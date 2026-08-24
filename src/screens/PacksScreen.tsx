@@ -56,18 +56,24 @@ export const PacksScreen: React.FC = () => {
 
     setIsDownloading(true);
     try {
-      // The MiewID model is a separate download from the pack -- only fetch
-      // it if it isn't already installed and verified, so re-downloading a
-      // pack update doesn't re-pull the ~200MB model every time.
-      if (!miewidModel || miewidModel.status !== 'ready') {
-        const resolvedSource = await resolveMiewidModelSource();
-        if (!resolvedSource.ok) {
-          Alert.alert(
-            'Download failed',
-            `Could not reach the model server: ${resolvedSource.message}`,
-          );
-          return;
-        }
+      const resolvedSource = await resolveMiewidModelSource();
+      if (!resolvedSource.ok) {
+        Alert.alert(
+          'Download failed',
+          `Could not reach the model server: ${resolvedSource.message}`,
+        );
+        return;
+      }
+
+      const installedModelIsCurrent =
+        miewidModel?.status === 'ready' &&
+        miewidModel.version === resolvedSource.source.version &&
+        miewidModel.sha256?.toLowerCase() ===
+          resolvedSource.source.expectedSha256.toLowerCase();
+
+      // Resolve the latest model every time so a ready but outdated model is
+      // replaced before installing a pack from a newer embedding space.
+      if (!installedModelIsCurrent) {
         const record = await acquireMiewidModel(resolvedSource.source);
         if (record.status !== 'ready') {
           Alert.alert(

@@ -39,11 +39,6 @@ jest.mock('../../../src/components/AnimatedListItem', () => ({
   },
 }));
 
-// Mock package.json
-jest.mock('../../../package.json', () => ({ version: '1.0.0' }), {
-  virtual: true,
-});
-
 const mockSetOnboardingComplete = jest.fn();
 const mockSetThemeMode = jest.fn();
 jest.mock('../../../src/stores', () => ({
@@ -52,6 +47,21 @@ jest.mock('../../../src/stores', () => ({
       setOnboardingComplete: mockSetOnboardingComplete,
       themeMode: 'system',
       setThemeMode: mockSetThemeMode,
+    };
+    return selector ? selector(state) : state;
+  }),
+  useWildlifeStore: jest.fn((selector?: any) => {
+    const state = {
+      miewidModel: {
+        version: '4.1.0',
+      },
+      packs: [
+        {
+          id: 'proj_kariega',
+          displayName: 'Kariega Elephants',
+          packVersion: '2026-08-23T10:00:00Z',
+        },
+      ],
     };
     return selector ? selector(state) : state;
   }),
@@ -88,7 +98,9 @@ describe('SettingsScreen', () => {
 
   it('renders version number', () => {
     const { getByText } = render(<SettingsScreen />);
-    expect(getByText('1.0.0')).toBeTruthy();
+    expect(getByText('0.1.0-field.1 (1787551542)')).toBeTruthy();
+    expect(getByText('4.1.0')).toBeTruthy();
+    expect(getByText('2026-08-23T10:00:00Z')).toBeTruthy();
   });
 
   it('renders Security navigation item', () => {
@@ -118,7 +130,7 @@ describe('SettingsScreen', () => {
 
   it('renders about section text', () => {
     const { getByText } = render(<SettingsScreen />);
-    expect(getByText('Version')).toBeTruthy();
+    expect(getByText('App version')).toBeTruthy();
     expect(getByText(/EleBook helps identify elephants/)).toBeTruthy();
   });
 

@@ -192,19 +192,22 @@ export function useCaptureFlow() {
             miewidModel.version,
             pack.embeddingModelVersion,
           );
-          if (compatibility === 'incompatible') {
+          if (compatibility !== 'compatible') {
             logger.warn(
               `[CaptureFlow] Excluding pack ${pack.id}: embedding model ${pack.embeddingModelVersion} incompatible with installed ${miewidModel.version}`,
             );
             return false;
           }
-          if (compatibility === 'minor-mismatch') {
-            logger.warn(
-              `[CaptureFlow] Pack ${pack.id} embedding model ${pack.embeddingModelVersion} minor-mismatches installed ${miewidModel.version}; proceeding`,
-            );
-          }
           return true;
         });
+
+        if (healthyPacks.length > 0 && compatiblePacks.length === 0) {
+          Alert.alert(
+            'Model and pack versions do not match',
+            `The installed MiewID model (${miewidModel.version}) cannot be used with the downloaded pack. Download the latest model and pack before identifying an elephant.`,
+          );
+          return;
+        }
 
         // Group packs by compatibility identity: packs sharing a detector
         // and embedding space run ONE detector pass and match against ONE

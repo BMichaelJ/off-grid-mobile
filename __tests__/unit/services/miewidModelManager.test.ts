@@ -246,15 +246,15 @@ describe('acquireMiewidModel', () => {
 describe('checkEmbeddingModelCompatibility', () => {
   it.each([
     ['4.1.0', '4.1.0', 'compatible'],
-    ['4.1.0', '4.1.3', 'compatible'],
     ['v4.1', '4.1.0', 'compatible'],
-    ['4.1.0', '4.2.0', 'minor-mismatch'],
-    ['4.2.0', '4.1.0', 'minor-mismatch'],
+    ['4.1.0', '4.1.3', 'incompatible'],
+    ['4.1.0', '4.2.0', 'incompatible'],
+    ['4.2.0', '4.1.0', 'incompatible'],
     ['4.1.0', '5.0.0', 'incompatible'],
     ['5.0.0', '4.1.0', 'incompatible'],
-    ['unknown', '4.1.0', 'minor-mismatch'],
-    ['4.1.0', 'garbage', 'minor-mismatch'],
-    ['', '4.1.0', 'minor-mismatch'],
+    ['unknown', '4.1.0', 'incompatible'],
+    ['4.1.0', 'garbage', 'incompatible'],
+    ['', '4.1.0', 'incompatible'],
   ])('(%s, %s) → %s', (modelVersion, packVersion, expected) => {
     expect(checkEmbeddingModelCompatibility(modelVersion, packVersion)).toBe(
       expected,

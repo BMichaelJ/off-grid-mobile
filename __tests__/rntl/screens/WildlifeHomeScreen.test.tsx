@@ -77,6 +77,7 @@ const createPack = (
   overrides: Partial<EmbeddingPack> = {},
 ): EmbeddingPack => ({
   id: 'pack-1',
+  packVersion: '2025-06-15T00:00:00Z',
   species: 'Megaptera novaeangliae',
   featureClass: 'fluke',
   displayName: 'Humpback Whale — Fluke',
