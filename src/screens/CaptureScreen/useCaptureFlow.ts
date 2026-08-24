@@ -5,77 +5,15 @@ import Geolocation from '@react-native-community/geolocation';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { wildlifePipeline } from '../../services/wildlifePipeline';
-import { buildEmbeddingDatabase } from '../../services/embeddingDatabaseBuilder';
+import { buildActiveSpeciesConfigs } from '../../services/speciesConfigBuilder';
 import {
   persistObservationFiles,
   deleteObservationFiles,
 } from '../../services/observationStorage';
 import { useWildlifeStore } from '../../stores/wildlifeStore';
-import { packManager } from '../../services/packManager';
-import { checkEmbeddingModelCompatibility } from '../../services/miewidModelManager';
-import type { SpeciesConfig } from '../../services/wildlifePipeline/types';
-import type {
-  DetectorConfig,
-  EmbeddingPackManifest,
-  MiewIDModelStatus,
-} from '../../types';
+import type { MiewIDModelStatus } from '../../types';
 import type { RootStackParamList } from '../../navigation/types';
 import logger from '../../utils/logger';
-
-/**
- * Load the detector config JSON from the pack directory.
- * Falls back to a safe default if loading fails.
- *
- * TODO(P0): Once packs include real detector_config.json files,
- * remove the fallback and require the config to exist.
- */
-async function loadDetectorConfig(
-  packDir: string,
-  manifest: EmbeddingPackManifest | null,
-): Promise<DetectorConfig> {
-  try {
-    if (!manifest) {
-      return DEFAULT_DETECTOR_CONFIG;
-    }
-    const configPath = `${packDir}/${manifest.detectorModel.configFile}`;
-    const RNFS = require('react-native-fs');
-    const content = await RNFS.readFile(configPath, 'utf8');
-    return JSON.parse(content);
-  } catch {
-    // Fallback until packs ship real detector configs
-    return DEFAULT_DETECTOR_CONFIG;
-  }
-}
-
-/** Load a pack's manifest, or null when unreadable (fallbacks apply). */
-async function loadManifestSafe(
-  packDir: string,
-): Promise<EmbeddingPackManifest | null> {
-  try {
-    return await packManager.loadManifest(`${packDir}/manifest.json`);
-  } catch {
-    return null;
-  }
-}
-
-const DEFAULT_DETECTOR_CONFIG: DetectorConfig = {
-  modelFile: '',
-  architecture: 'yolov5',
-  inputSize: [640, 640],
-  inputChannels: 3,
-  channelOrder: 'RGB',
-  normalize: { mean: [0, 0, 0], std: [1, 1, 1], scale: 1 / 255 },
-  confidenceThreshold: 0.25,
-  nmsThreshold: 0.45,
-  maxDetections: 100,
-  outputFormat: 'yolov5',
-  classLabels: ['animal'],
-  outputSpec: {
-    boxFormat: 'cxcywh',
-    coordinateType: 'normalized',
-    layout: '[1, num_detections, 5+num_classes]',
-  },
-};
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -179,74 +117,27 @@ export function useCaptureFlow() {
 
       setIsProcessing(true);
       try {
-        // Quarantined packs failed integrity validation — their embeddings
-        // or index cannot be trusted until re-validated.
-        const healthyPacks = packs.filter(
-          pack => pack.status !== 'quarantined',
+        const { localIndividuals } = useWildlifeStore.getState();
+        const { speciesConfigs, excludedPacks } =
+          await buildActiveSpeciesConfigs(packs, miewidModel, localIndividuals);
+
+        // Mirror the original guard: healthy (non-quarantined) packs existed,
+        // but every one of them was excluded for embedding-model
+        // incompatibility — nothing left to match against.
+        const quarantinedIds = new Set(
+          excludedPacks
+            .filter(excluded => excluded.reason === 'quarantined')
+            .map(excluded => excluded.packId),
         );
-
-        // Exclude packs whose embeddings live in a different model space —
-        // matching across major MiewID versions produces meaningless scores.
-        const compatiblePacks = healthyPacks.filter(pack => {
-          const compatibility = checkEmbeddingModelCompatibility(
-            miewidModel.version,
-            pack.embeddingModelVersion,
-          );
-          if (compatibility !== 'compatible') {
-            logger.warn(
-              `[CaptureFlow] Excluding pack ${pack.id}: embedding model ${pack.embeddingModelVersion} incompatible with installed ${miewidModel.version}`,
-            );
-            return false;
-          }
-          return true;
-        });
-
-        if (healthyPacks.length > 0 && compatiblePacks.length === 0) {
+        const healthyPackCount = packs.length - quarantinedIds.size;
+        const incompatiblePackCount = excludedPacks.length - quarantinedIds.size;
+        if (healthyPackCount > 0 && incompatiblePackCount === healthyPackCount) {
           Alert.alert(
             'Model and pack versions do not match',
             `The installed MiewID model (${miewidModel.version}) cannot be used with the downloaded pack. Download the latest model and pack before identifying an elephant.`,
           );
           return;
         }
-
-        // Group packs by compatibility identity: packs sharing a detector
-        // and embedding space run ONE detector pass and match against ONE
-        // merged database. Distinct groups (different feature class or
-        // detector) each get their own pass — never a mixed database.
-        const groups = new Map<string, typeof compatiblePacks>();
-        for (const pack of compatiblePacks) {
-          const key = [
-            pack.species,
-            pack.featureClass,
-            pack.detectorModelFile,
-            pack.embeddingModelVersion,
-          ].join('|');
-          groups.set(key, [...(groups.get(key) ?? []), pack]);
-        }
-
-        const { localIndividuals } = useWildlifeStore.getState();
-        const speciesConfigs: SpeciesConfig[] = await Promise.all(
-          Array.from(groups.values()).map(async groupPacks => {
-            const primary = groupPacks[0];
-            const manifest = await loadManifestSafe(primary.packDir);
-            return {
-              packId: primary.id,
-              species: primary.species,
-              detectorModelPath: primary.detectorModelFile,
-              detectorConfig: await loadDetectorConfig(
-                primary.packDir,
-                manifest,
-              ),
-              embeddingDatabase: await buildEmbeddingDatabase(
-                primary.species,
-                groupPacks,
-                localIndividuals,
-              ),
-              embeddingInputSize: manifest?.embeddingModel.inputSize,
-              embeddingNormalize: manifest?.embeddingModel.normalize,
-            };
-          }),
-        );
 
         const gps = await getDeviceLocation();
         const deviceInfo = getDeviceInfo();

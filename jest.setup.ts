@@ -261,6 +261,7 @@ jest.mock('react-native-fs', () => ({
   readDir: jest.fn(() => Promise.resolve([])),
   readFile: jest.fn(() => Promise.resolve('')),
   writeFile: jest.fn(() => Promise.resolve()),
+  appendFile: jest.fn(() => Promise.resolve()),
   stat: jest.fn(() => Promise.resolve({ size: 1000, isFile: () => true })),
   copyFile: jest.fn(() => Promise.resolve()),
   moveFile: jest.fn(() => Promise.resolve()),
@@ -280,6 +281,7 @@ jest.mock('react-native-device-info', () => ({
   getHardware: jest.fn(() => Promise.resolve('unknown')),
   getVersion: jest.fn(() => '0.1.0-field.1'),
   getBuildNumber: jest.fn(() => '1787551542'),
+  getBundleId: jest.fn(() => 'org.ganesha.elebook.dev'),
 }));
 
 // react-native-image-picker mock
