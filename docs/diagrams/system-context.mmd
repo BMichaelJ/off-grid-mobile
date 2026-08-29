@@ -1,0 +1,41 @@
+flowchart LR
+    User[Field researcher]
+
+    subgraph Device[React Native device - Android verified, iOS incomplete]
+        App[Off Grid mobile app]
+        Camera[Camera and photo library]
+        Location[Location services]
+        Native[Native image preprocessing]
+        ORT[ONNX Runtime]
+        Files[(Device files)]
+        SQLite[(SQLite)]
+        State[(Persisted UI state)]
+
+        User --> App
+        App --> Camera
+        App --> Location
+        App --> Native --> ORT
+        App --> Files
+        App --> SQLite
+        App --> State
+    end
+
+    Identity[External identity provider]
+    ArtifactAPI[External model and pack API]
+    ObservationAPI[External observation API]
+    ArtifactStore[Signed artifact downloads]
+    PhotoStore[Signed photo upload target]
+    Catalog[External research catalog]
+
+    App -->|sign in| Identity
+    App -->|latest model and pack metadata| ArtifactAPI
+    ArtifactAPI -->|short-lived download URL| ArtifactStore
+    App -->|download model or pack| ArtifactStore
+    App -->|request upload and submit reviewed match| ObservationAPI
+    ObservationAPI -->|short-lived upload URL| PhotoStore
+    App -->|upload reviewed crop| PhotoStore
+
+    ObservationAPI -. integration outside this repository .-> Catalog
+
+    classDef external fill:#f5f5f5,stroke:#777,color:#222;
+    class Identity,ArtifactAPI,ObservationAPI,ArtifactStore,PhotoStore,Catalog external;

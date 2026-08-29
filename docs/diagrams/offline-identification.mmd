@@ -1,0 +1,35 @@
+sequenceDiagram
+    actor Researcher
+    participant Screen as Capture screen
+    participant Pipeline as Wildlife pipeline
+    participant Native as Native image tensor
+    participant ORT as ONNX Runtime
+    participant Pack as Local embedding database
+    participant Match as Match service
+    participant DB as SQLite and device files
+    participant Review as Match review
+
+    Researcher->>Screen: Capture or select a photo
+    Screen->>Screen: Read optional GPS and processing context
+    Screen->>Pipeline: Process local image URI
+    Pipeline->>Native: Decode, resize, and normalize image
+    Native->>ORT: Run detector
+    ORT-->>Pipeline: Bounding boxes and confidence
+    Pipeline->>Native: Crop and normalize each detection
+    Native->>ORT: Run MiewID embedding model
+    ORT-->>Pipeline: Embedding vector (current model: 2,152 floats)
+    Pipeline->>Pack: Load version-compatible packs and species-matched local vectors
+    Pipeline->>Match: Rank candidates by cosine similarity
+    Match-->>Screen: Candidates, scores, and sources
+    Screen->>DB: Save observation with processing-time timestamp
+    Screen->>Review: Open candidate review
+    alt Approve a candidate
+        Researcher->>Review: Approve pack or local candidate
+        Review->>DB: Persist approved decision
+    else Create provisional local individual
+        Researcher->>Review: Select no match
+        Review->>DB: Persist local record and approved local decision
+    else Skip
+        Researcher->>Review: Skip review
+        Review-->>Researcher: Leave detection pending
+    end

@@ -1,0 +1,15 @@
+stateDiagram-v2
+    [*] --> Pending
+        Pending --> Pending: sync attempt finds pending review
+    Pending --> Uploading: researcher starts sync
+        Uploading --> Synced: eligible detections submitted or none eligible
+    Uploading --> Failed: transient failure
+    Failed --> Uploading: manual retry
+    FailedPermanent --> Uploading: explicit retry
+        Uploading --> FailedPermanent: failure reaches retry limit
+        Uploading --> Uploading: app terminates; no startup recovery
+    Synced --> [*]
+
+        note right of Synced
+            May mean zero detections uploaded
+        end note

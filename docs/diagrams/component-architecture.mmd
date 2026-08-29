@@ -1,0 +1,85 @@
+flowchart TB
+    subgraph Presentation[Presentation]
+        Nav[Navigation]
+        PacksUI[Packs]
+        CaptureUI[Capture]
+        ResultsUI[Detection results]
+        ReviewUI[Match review]
+        ObsUI[Observations]
+        SyncUI[Sync]
+        SettingsUI[Settings and security]
+        Nav --> PacksUI
+        Nav --> CaptureUI
+        Nav --> ResultsUI
+        Nav --> ReviewUI
+        Nav --> ObsUI
+        Nav --> SyncUI
+        Nav --> SettingsUI
+    end
+
+    subgraph Domain[Application and domain services]
+        CaptureFlow[Capture flow controller]
+        Pipeline[Wildlife pipeline]
+        Config[Species configuration builder]
+        DBBuilder[Embedding database builder]
+        Matcher[Cosine match service]
+        ModelResolver[Model source resolver]
+        PackDownload[Pack download service]
+        PackManager[Pack manager and validator]
+        ModelManager[MiewID model manager]
+        SyncEngine[Sync engine]
+
+        CaptureFlow --> Config
+        CaptureFlow --> Pipeline
+        Config --> DBBuilder --> Matcher
+        Config --> PackManager
+        Pipeline --> Matcher
+    end
+
+    subgraph Persistence[Persistence]
+        ObservationRepo[Observation repository]
+        ObservationFiles[Observation file storage]
+        LocalDB[(SQLite)]
+        WildlifeStore[Wildlife store]
+        AsyncState[(AsyncStorage)]
+        DeviceFiles[(Models, packs, photos, crops)]
+
+        ObservationRepo --> LocalDB
+        WildlifeStore --> AsyncState
+    WildlifeStore --> ObservationRepo
+    ObservationFiles --> DeviceFiles
+        PackManager --> DeviceFiles
+        ModelManager --> DeviceFiles
+    end
+
+    subgraph Platform[Native and external adapters]
+        ImageTensor[ImageTensor native bridge]
+        Onnx[ONNX inference service]
+        APIClient[External API client]
+        FileTransfer[File download and upload]
+
+        ImageTensor --> Onnx
+        APIClient --> FileTransfer
+    end
+
+    CaptureUI --> CaptureFlow
+    CaptureFlow --> ObservationFiles
+    CaptureFlow --> WildlifeStore
+    Pipeline --> ImageTensor
+    Pipeline --> Onnx
+    ResultsUI --> WildlifeStore
+    ReviewUI --> WildlifeStore
+    ObsUI --> WildlifeStore
+    PacksUI --> PackDownload
+    PacksUI --> ModelResolver
+    PacksUI --> ModelManager
+    ModelResolver --> APIClient
+    ModelManager --> FileTransfer
+    ModelManager --> WildlifeStore
+    PackDownload --> APIClient
+    PackDownload --> FileTransfer
+    PackDownload --> PackManager
+    PackDownload --> WildlifeStore
+    SyncUI --> SyncEngine
+    SyncEngine --> WildlifeStore
+    SyncEngine --> APIClient

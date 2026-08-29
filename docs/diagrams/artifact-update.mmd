@@ -1,0 +1,37 @@
+sequenceDiagram
+    actor Researcher
+    participant UI as Packs screen
+    participant Resolver as Model source resolver
+    participant Model as Model manager
+    participant API as External artifact API
+    participant Download as File download service
+    participant Pack as Pack download service
+    participant Validate as Pack validator
+    participant Store as Wildlife store
+
+    Researcher->>UI: Select Download Latest Pack (empty state only)
+    UI->>Resolver: Resolve latest model metadata
+    Resolver->>API: GET latest model
+    API-->>Resolver: Version, size, SHA-256, download URL
+    alt Installed model is not current
+        UI->>Model: Acquire model
+        Model->>Store: Replace current record with downloading state
+        Model->>Download: Download to staging and verify
+        Download-->>Model: Atomically moved verified file
+        Model->>Store: Save ready, missing, or corrupt result
+    end
+    UI->>Pack: Acquire latest project pack
+    Pack->>API: GET latest pack
+    API-->>Pack: Version, size, SHA-256, counts, download URL
+    Pack->>Download: Download ZIP to staging and verify
+    Pack->>Pack: Remove prior extracted project directory
+    Pack->>Pack: Extract candidate
+    Pack->>Validate: Validate manifest, files, index, and vectors
+    alt Candidate is valid
+        Validate-->>Pack: Valid manifest
+        Pack->>Store: Register ready pack
+    else Candidate is invalid
+        Validate-->>Pack: Validation errors
+        Pack->>Pack: Remove candidate
+        Pack-->>UI: Installation failed
+    end
