@@ -1,8 +1,8 @@
 /**
  * SelectRoleScreen Tests
  *
- * First-sign-in-only step, reached from SignInScreen when GET /users/profile
- * comes back 404 -- mirrors the web app's select-role page.
+ * First-sign-in-only profile setup. Access is assigned by the backend from
+ * the verified Microsoft identity; the user never chooses a role.
  */
 
 import React from 'react';
@@ -62,8 +62,6 @@ jest.mock('../../../src/services/ganeshaApiClient', () => ({
 
 import { SelectRoleScreen } from '../../../src/screens/SelectRoleScreen';
 import { ganeshaApiClient } from '../../../src/services/ganeshaApiClient';
-import { GANESHA_ORG_ID } from '../../../src/config/ganeshaApi';
-
 const mockCreateUserProfile = ganeshaApiClient.createUserProfile as jest.Mock;
 
 beforeEach(() => {
@@ -71,51 +69,36 @@ beforeEach(() => {
 });
 
 describe('SelectRoleScreen', () => {
-  it('renders both role buttons', () => {
-    const { getByTestId } = render(<SelectRoleScreen />);
-    expect(getByTestId('select-role-researcher-button')).toBeTruthy();
-    expect(getByTestId('select-role-citizen-button')).toBeTruthy();
+  it('renders one complete-profile action and no role choices', () => {
+    const { getByTestId, queryByTestId } = render(<SelectRoleScreen />);
+    expect(getByTestId('complete-profile-button')).toBeTruthy();
+    expect(queryByTestId('select-role-researcher-button')).toBeNull();
+    expect(queryByTestId('select-role-citizen-button')).toBeNull();
   });
 
-  it('requires a name before saving a role', () => {
+  it('requires a name before completing the profile', () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     const { getByTestId } = render(<SelectRoleScreen />);
 
-    fireEvent.press(getByTestId('select-role-researcher-button'));
+    fireEvent.press(getByTestId('complete-profile-button'));
 
     expect(alertSpy).toHaveBeenCalledWith('Name required', expect.any(String));
     expect(mockCreateUserProfile).not.toHaveBeenCalled();
   });
 
-  it('creates a researcher profile with the entered name and the shared org id, then replaces with Main', async () => {
+  it('creates a profile with only the entered name, then replaces with Main', async () => {
     mockCreateUserProfile.mockResolvedValue({ ok: true, data: {} });
     const { getByTestId, getByPlaceholderText } = render(<SelectRoleScreen />);
 
     fireEvent.changeText(getByPlaceholderText('Enter your name'), 'Alex');
-    fireEvent.press(getByTestId('select-role-researcher-button'));
+    fireEvent.press(getByTestId('complete-profile-button'));
 
     await waitFor(() =>
       expect(mockCreateUserProfile).toHaveBeenCalledWith({
         name: 'Alex',
-        role: 'researcher',
-        orgId: GANESHA_ORG_ID,
       }),
     );
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('Main'));
-  });
-
-  it('creates a citizen profile when that role is selected', async () => {
-    mockCreateUserProfile.mockResolvedValue({ ok: true, data: {} });
-    const { getByTestId, getByPlaceholderText } = render(<SelectRoleScreen />);
-
-    fireEvent.changeText(getByPlaceholderText('Enter your name'), 'Sam');
-    fireEvent.press(getByTestId('select-role-citizen-button'));
-
-    await waitFor(() =>
-      expect(mockCreateUserProfile).toHaveBeenCalledWith(
-        expect.objectContaining({ name: 'Sam', role: 'citizen' }),
-      ),
-    );
   });
 
   it('alerts and does not navigate when saving the profile fails', async () => {
@@ -124,9 +107,9 @@ describe('SelectRoleScreen', () => {
     const { getByTestId, getByPlaceholderText } = render(<SelectRoleScreen />);
 
     fireEvent.changeText(getByPlaceholderText('Enter your name'), 'Alex');
-    fireEvent.press(getByTestId('select-role-researcher-button'));
+    fireEvent.press(getByTestId('complete-profile-button'));
 
-    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Could not save your role', 'HTTP 500'));
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Could not save your profile', 'HTTP 500'));
     expect(mockReplace).not.toHaveBeenCalled();
   });
 });

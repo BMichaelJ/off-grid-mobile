@@ -65,7 +65,7 @@ class GaneshaApiClient {
     return this.request<UserProfile>('/users/profile');
   }
 
-  /** Creates (first sign-in) or updates the signed-in user's Cosmos profile -- mirrors the web app's select-role step. */
+  /** Creates or updates the signed-in profile; the backend assigns organization and access. */
   async createUserProfile(payload: CreateUserProfilePayload): Promise<GaneshaApiResult<UserProfile>> {
     return this.request<UserProfile>('/users/profile', { method: 'POST', body: payload });
   }

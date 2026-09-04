@@ -144,10 +144,13 @@ function installHappyUpload(): void {
 beforeEach(() => {
   jest.clearAllMocks();
   installHappyUpload();
-  mockGetUploadUrl.mockResolvedValue({
+  mockGetUploadUrl.mockImplementation(async (_projectId: string, filename: string) => ({
     ok: true,
-    data: { uploadUrl: 'https://blob.example/upload?sig=x', blobUrl: 'https://blob.example/final.jpg' },
-  });
+    data: {
+      uploadUrl: `https://blob.example/upload/${filename}?sig=x`,
+      blobUrl: `https://blob.example/${filename}`,
+    },
+  }));
   mockSubmitObservation.mockResolvedValue({
     ok: true,
     data: { submissionId: 'sub-1', status: 'reviewing', imageUrl: 'https://blob.example/signed.jpg' },
@@ -188,7 +191,7 @@ describe('syncObservation', () => {
     expect(mockGetUploadUrl).toHaveBeenCalledWith('proj_kariega', 'det-1.jpg');
     expect(mockUploadFiles).toHaveBeenCalledWith(
       expect.objectContaining({
-        toUrl: 'https://blob.example/upload?sig=x',
+        toUrl: 'https://blob.example/upload/det-1.jpg?sig=x',
         method: 'PUT',
         binaryStreamOnly: true,
         files: [
@@ -203,7 +206,7 @@ describe('syncObservation', () => {
     expect(mockSubmitObservation).toHaveBeenCalledWith(
       'proj_kariega',
       expect.objectContaining({
-        imageUrl: 'https://blob.example/final.jpg',
+        imageUrl: 'https://blob.example/det-1.jpg',
         elephantId: 'elephant-thomas',
         elephantName: 'Thomas',
         confidence: 0.95,
@@ -257,14 +260,14 @@ describe('syncObservation', () => {
     expect((result as { message: string }).message).toContain('HTTP 403');
   });
 
-  it('does not submit a detection approved against a local-only individual', async () => {
+  it('uploads full evidence for a provisional local individual before marking it synced', async () => {
     installStore(
       [
         makeObservation({
           detections: [
             makeDetection({
               matchResult: {
-                topCandidates: [makeCandidate({ individualId: 'FIELD-001', source: 'local' })],
+                topCandidates: [makeCandidate()],
                 approvedIndividual: 'FIELD-001',
                 reviewStatus: 'approved',
               },
@@ -277,9 +280,28 @@ describe('syncObservation', () => {
 
     const result = await syncObservation(observations[0]);
 
-    expect(result).toEqual({ observationId: 'obs-1', status: 'synced', submittedCount: 0 });
-    expect(mockGetUploadUrl).not.toHaveBeenCalled();
-    expect(mockSubmitObservation).not.toHaveBeenCalled();
+    expect(result).toEqual({ observationId: 'obs-1', status: 'synced', submittedCount: 1 });
+    expect(mockGetUploadUrl).toHaveBeenNthCalledWith(1, 'proj_kariega', 'obs-1-source.jpg');
+    expect(mockGetUploadUrl).toHaveBeenNthCalledWith(2, 'proj_kariega', 'det-1.jpg');
+    expect(mockSubmitObservation).toHaveBeenCalledWith(
+      'proj_kariega',
+      expect.objectContaining({
+        imageUrl: 'https://blob.example/det-1.jpg',
+        sourceImageUrl: 'https://blob.example/obs-1-source.jpg',
+        elephantId: null,
+        provisionalId: 'FIELD-001',
+        reviewDecision: 'unknown',
+        detectedSpecies: 'elephant',
+        detectorConfidence: 0.95,
+        boundingBox: { x: 0.1, y: 0.2, width: 0.3, height: 0.4 },
+        alternatives: [makeCandidate()],
+        lat: -33.5,
+        long: 26.9,
+        captureTimestamp: '2026-08-23T10:00:00Z',
+      }),
+    );
+    expect(updateDetection).toHaveBeenCalledWith('obs-1', 'det-1', { ganeshaSubmissionId: 'sub-1' });
+    expect(syncQueue[0].wildbookEncounterIds).toEqual(['sub-1']);
   });
 
   it('skips a detection that was already submitted on a prior attempt (idempotent retry)', async () => {

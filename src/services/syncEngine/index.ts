@@ -23,14 +23,10 @@ import type { SyncAllResult, SyncObservationResult } from './types';
  *   `reviewStatus: 'pending'` -- see `isReadyToSync`. A still-pending
  *   detection is not an error, just not decided yet; the observation is
  *   left alone (sync_queue untouched) until the next sync attempt.
- * - Only detections approved against a real *pack* individual are
- *   submitted. Approving "No Match" on-device mints a brand-new
- *   *local-only* field id (e.g. `FIELD-001`) for an individual that isn't
- *   in the central catalog yet -- the backend has no concept of an
- *   uncataloged individual, and `elephantId` is required, so submitting a
- *   local-only id would silently pollute Cosmos DB with a string no
- *   researcher can resolve. These stay un-submitted indefinitely until a
- *   researcher formally catalogs them some other way; see `isPackMatch`.
+ * - Detections approved against a pack individual are submitted as matches.
+ *   "No Match" detections carry their local `FIELD-*` id as a provisional
+ *   review key, never as an official `elephantId`; original photo, crop,
+ *   candidates, box, GPS, notes, and timestamps are preserved remotely.
  * - Per-detection `ganeshaSubmissionId` (schema v2) makes retries
  *   idempotent: if an observation has 3 eligible detections and the 2nd
  *   upload fails, the 1st's submission id is already persisted, so retrying
@@ -49,12 +45,16 @@ function isPackMatch(detection: Detection): boolean {
   );
 }
 
+function isProvisionalIndividual(detection: Detection): boolean {
+  return detection.matchResult.approvedIndividual?.startsWith('FIELD-') ?? false;
+}
+
 function eligibleDetections(observation: Observation): Detection[] {
   return observation.detections.filter(
     (detection) =>
       detection.matchResult.reviewStatus === 'approved' &&
       !detection.ganeshaSubmissionId &&
-      isPackMatch(detection),
+      (isPackMatch(detection) || isProvisionalIndividual(detection)),
   );
 }
 
@@ -64,8 +64,8 @@ function allSubmissionIds(observation: Observation): string[] {
     .filter((id): id is string => id !== null);
 }
 
-async function uploadDetectionPhoto(detection: Detection): Promise<{ blobUrl: string }> {
-  const uploadUrlResult = await ganeshaApiClient.getUploadUrl(GANESHA_PROJECT_ID, `${detection.id}.jpg`);
+async function uploadPhoto(filePath: string, filename: string): Promise<{ blobUrl: string }> {
+  const uploadUrlResult = await ganeshaApiClient.getUploadUrl(GANESHA_PROJECT_ID, filename);
   if (!uploadUrlResult.ok) {
     throw new Error(`upload-url request failed: ${uploadUrlResult.message}`);
   }
@@ -86,8 +86,8 @@ async function uploadDetectionPhoto(detection: Detection): Promise<{ blobUrl: st
       files: [
         {
           name: 'file',
-          filename: `${detection.id}.jpg`,
-          filepath: detection.croppedImageUri,
+          filename,
+          filepath: filePath,
           filetype: 'image/jpeg',
         },
       ],
@@ -138,21 +138,31 @@ async function resolveApprovedIndividualName(
   return null;
 }
 
-async function submitDetection(observation: Observation, detection: Detection): Promise<string> {
-  const { blobUrl } = await uploadDetectionPhoto(detection);
+async function submitDetectionEvidence(
+  observation: Observation,
+  detection: Detection,
+  sourceImageUrl: string | null,
+): Promise<string> {
+  const { blobUrl } = await uploadPhoto(detection.croppedImageUri, `${detection.id}.jpg`);
+  const provisional = isProvisionalIndividual(detection);
+  const approvedIndividual = detection.matchResult.approvedIndividual;
   const approvedCandidate = detection.matchResult.topCandidates.find(
-    (candidate) => candidate.individualId === detection.matchResult.approvedIndividual,
+    (candidate) => candidate.individualId === approvedIndividual,
   );
-  const elephantName = await resolveApprovedIndividualName(detection);
+  const elephantName = provisional ? null : await resolveApprovedIndividualName(detection);
 
   const submitResult = await ganeshaApiClient.submitObservation(GANESHA_PROJECT_ID, {
     imageUrl: blobUrl,
-    // isPackMatch() (checked by the caller, eligibleDetections()) guarantees
-    // approvedIndividual is set whenever a detection reaches this point.
-    elephantId: detection.matchResult.approvedIndividual as string,
+    sourceImageUrl,
+    elephantId: provisional ? null : approvedIndividual,
+    provisionalId: provisional ? approvedIndividual : null,
+    reviewDecision: provisional ? 'unknown' : 'matched',
     elephantName,
     confidence: approvedCandidate?.score ?? null,
     alternatives: detection.matchResult.topCandidates,
+    detectedSpecies: detection.species,
+    detectorConfidence: detection.speciesConfidence,
+    boundingBox: detection.boundingBox,
     lat: observation.gps?.lat ?? null,
     long: observation.gps?.lon ?? null,
     observationDate: observation.timestamp,
@@ -204,9 +214,21 @@ export async function syncObservation(observation: Observation): Promise<SyncObs
   await store.updateSyncStatus(observationId, { status: 'uploading' });
 
   let submittedCount = 0;
+  let sourceImageUrl: string | null = null;
   for (const detection of toSubmit) {
     try {
-      const submissionId = await submitDetection(observation, detection);
+      if (isProvisionalIndividual(detection) && sourceImageUrl === null) {
+        const sourceUpload = await uploadPhoto(
+          observation.photoUri,
+          `${observation.id}-source.jpg`,
+        );
+        sourceImageUrl = sourceUpload.blobUrl;
+      }
+      const submissionId = await submitDetectionEvidence(
+        observation,
+        detection,
+        sourceImageUrl,
+      );
       await store.updateDetection(observationId, detection.id, { ganeshaSubmissionId: submissionId });
       submittedCount += 1;
     } catch (error) {

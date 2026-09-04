@@ -30,10 +30,21 @@ export interface UploadUrlInfo {
  */
 export interface SubmitObservationPayload {
   imageUrl: string;
-  elephantId: string;
+  sourceImageUrl?: string | null;
+  elephantId: string | null;
+  provisionalId?: string | null;
+  reviewDecision?: 'matched' | 'unknown';
   elephantName?: string | null;
   confidence?: number | null;
   alternatives?: unknown[] | null;
+  detectedSpecies?: string | null;
+  detectorConfidence?: number | null;
+  boundingBox?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null;
   lat?: number | null;
   long?: number | null;
   regionName?: string;
@@ -71,8 +82,6 @@ export interface UserProfile {
 
 export interface CreateUserProfilePayload {
   name: string;
-  role: 'researcher' | 'citizen';
-  orgId?: string;
 }
 
 /**

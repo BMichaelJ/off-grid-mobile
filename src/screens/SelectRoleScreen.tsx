@@ -9,46 +9,39 @@ import { Card } from '../components/Card';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
-import { GANESHA_ORG_ID } from '../config/ganeshaApi';
 import { ganeshaApiClient } from '../services/ganeshaApiClient';
 import type { RootStackParamList } from '../navigation/types';
-import type { CreateUserProfilePayload } from '../services/ganeshaApiClient';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'SelectRole'>;
 
-type Role = CreateUserProfilePayload['role'];
-
 /**
  * First-sign-in-only step, reached from SignInScreen when GET /users/profile
- * comes back 404 -- mirrors the web app's `select-role` page (same backend
- * endpoint, same orgId, same two roles) so a person's role/org is
- * consistent whichever client they signed up from first.
+ * comes back 404. The backend assigns organization and access from the
+ * authenticated Microsoft identity; the client only supplies a display name.
  */
 export const SelectRoleScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const [name, setName] = useState('');
-  const [savingRole, setSavingRole] = useState<Role | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSelectRole = useCallback(
-    async (role: Role) => {
+  const handleCompleteProfile = useCallback(
+    async () => {
       const trimmedName = name.trim();
       if (!trimmedName) {
         Alert.alert('Name required', 'Please enter your name first.');
         return;
       }
 
-      setSavingRole(role);
+      setIsSaving(true);
       const result = await ganeshaApiClient.createUserProfile({
         name: trimmedName,
-        role,
-        orgId: GANESHA_ORG_ID,
       });
-      setSavingRole(null);
+      setIsSaving(false);
 
       if (!result.ok) {
-        Alert.alert('Could not save your role', result.message);
+        Alert.alert('Could not save your profile', result.message);
         return;
       }
 
@@ -57,17 +50,15 @@ export const SelectRoleScreen: React.FC = () => {
     [name, navigation],
   );
 
-  const isSaving = savingRole !== null;
-
   return (
     <SafeAreaView style={styles.container} testID="select-role-screen" edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>Select Your Role</Text>
+        <Text style={styles.title}>Complete Your Profile</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.subtitle}>
-          Choose how you&apos;d like to contribute to elephant conservation
+          Your access is assigned from your Microsoft account.
         </Text>
 
         <View style={styles.inputGroup}>
@@ -83,38 +74,20 @@ export const SelectRoleScreen: React.FC = () => {
           />
         </View>
 
-        <Card style={styles.roleCard}>
+        <Card style={styles.profileCard}>
           <Button
-            title="Researcher"
+            title="Continue"
             variant="primary"
-            onPress={() => handleSelectRole('researcher')}
-            loading={savingRole === 'researcher'}
+            onPress={handleCompleteProfile}
+            loading={isSaving}
             disabled={isSaving}
-            icon={<Icon name="clipboard" size={16} color={colors.background} />}
-            testID="select-role-researcher-button"
+            icon={<Icon name="user-check" size={16} color={colors.background} />}
+            testID="complete-profile-button"
           />
-          <Text style={styles.roleHint}>
-            Manage projects, verify identifications, access full data
-          </Text>
-        </Card>
-
-        <Card style={styles.roleCard}>
-          <Button
-            title="Citizen Scientist"
-            variant="secondary"
-            onPress={() => handleSelectRole('citizen')}
-            loading={savingRole === 'citizen'}
-            disabled={isSaving}
-            icon={<Icon name="camera" size={16} color={colors.primary} />}
-            testID="select-role-citizen-button"
-          />
-          <Text style={styles.roleHint}>
-            Capture photos and contribute sightings
-          </Text>
         </Card>
 
         <Text style={styles.footnote}>
-          You can change your role later from Settings.
+          Approved field researchers receive researcher access automatically.
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -164,13 +137,8 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     padding: SPACING.md,
     color: colors.text,
   },
-  roleCard: {
+  profileCard: {
     marginBottom: SPACING.md,
-    gap: SPACING.sm,
-  },
-  roleHint: {
-    ...TYPOGRAPHY.meta,
-    color: colors.textMuted,
   },
   footnote: {
     ...TYPOGRAPHY.meta,

@@ -178,12 +178,9 @@ export interface Detection {
   /**
    * The Ganesha backend submission id returned once this detection has been
    * successfully synced (see `POST /projects/{id}/submissions`), or `null`
-   * if it has not been submitted yet. Set only for detections the sync
-   * engine actually submits -- see `services/syncEngine` for which
-   * detections are eligible (currently: reviewed + approved against a real
-   * pack individual; local-only "new individual" approvals are not
-   * submitted yet, there is no backend concept for an uncataloged
-   * individual).
+  * if it has not been submitted yet. Both approved pack matches and
+  * reviewed provisional `FIELD-*` individuals receive a server submission
+  * id; provisional ids are review keys and never official elephant ids.
    */
   ganeshaSubmissionId: string | null;
 }
