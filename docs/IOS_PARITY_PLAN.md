@@ -3,6 +3,31 @@
 Goal: run the app **as it exists today on Android** (this branch's `EleBook` wildlife
 re-identification build) on an **iOS device**, at feature parity.
 
+## Current status
+
+The iOS integration patch was merged into the EleBook feature branch as `069a524`.
+Shared TypeScript/Jest checks and the Android unit, lint, and debug-build checks passed
+against the proposed merge. The remaining work below is owned by the iOS contributor.
+
+These known limitations do **not** block opening a draft pull request to Wild Me. They
+do block describing iOS as field-ready:
+
+- The repository's CocoaPods 1.17 lockfile requires `xcodeproj >= 1.28.1`, while the
+  current `Gemfile` requires `xcodeproj < 1.26.0`; the Ruby toolchain must be reconciled
+  and pinned with a committed `Gemfile.lock`.
+- A clean macOS install, SwiftLint, XCTest, simulator build, and device/archive build
+  have not been independently reproduced after the merge.
+- Entra sign-in reaches Microsoft login, but the callback, token storage, and one
+  authenticated EleBook API request still need an end-to-end device check.
+- Model and pack download, offline inference, GPS, persistence after restart, and sync
+  still need the full workflow check on a physical iPhone.
+- Institutional signing ownership, supported iPhone/iOS versions, and distribution
+  through TestFlight or the App Store remain operational decisions.
+- The AppAuth URL callback should fall back to React Native linking when AppAuth does
+  not consume a URL.
+- Privacy descriptions must reflect elephant photo capture/selection and must not
+  request microphone or speech access unless those capabilities are actually shipped.
+
 This is not a port. The app is already a bare React Native 0.83.1 cross‑platform
 project with a complete iOS target (Xcode project + workspace, Podfile, AppDelegate,
 entitlements, launch screen, privacy manifest, and native Swift modules). The whole
@@ -34,16 +59,20 @@ buys nothing while risking state-migration bugs. Optional cosmetic cleanup only.
 
 ---
 
-## 2. Mac-required steps (cannot be done on Linux/CI without a macOS runner)
+## 2. iOS contributor follow-up (Mac required)
 
-Do these on a Mac with **Xcode 15+** (project targets **iOS 17.0** minimum — raised for
-the Core ML image-gen dependency). In order:
+Do these on a Mac with a supported Xcode version. The project currently targets iOS
+17.0; confirm that this includes the expected field devices before treating it as the
+supported floor.
 
-1. **Install pods**
+1. **Reconcile and install dependencies**
    ```bash
-   npm install
-   cd ios && pod install && cd ..
+  npm ci
+  bundle install
+  cd ios && bundle exec pod install && cd ..
    ```
+  Fix the incompatible CocoaPods/xcodeproj constraints first, commit `Gemfile.lock`,
+  and verify that a second install produces no `Podfile.lock` diff.
    Confirm autolinking picks up `onnxruntime-react-native`, `op-sqlite`,
    `react-native-reanimated`, `react-native-app-auth`, `react-native-keychain`,
    geolocation, image-picker, vector-icons, etc. (`Podfile.lock` already lists them).
@@ -51,8 +80,9 @@ the Core ML image-gen dependency). In order:
 2. **Open the workspace, set signing.**
    Open `ios/OffgridMobile.xcworkspace`, select the `OffgridMobile` target →
    Signing & Capabilities → pick your Team, let Xcode manage a provisioning profile
-   for `org.ganesha.elebook`. The `increased-memory-limit` entitlement is already set
-   (needed for on-device ML) — verify your provisioning profile allows it.
+  for `org.ganesha.elebook`. An increased-memory entitlement file exists, but its
+  target wiring and provisioning support are not yet verified; enable it only if
+  device measurements show it is required.
 
 3. **Build & run to a device** (not just the simulator — see §3):
    ```bash
@@ -63,7 +93,7 @@ the Core ML image-gen dependency). In order:
    - Camera capture → animal detection → MiewID embedding → match review → save observation.
    - Entra sign-in returns to the app (URL scheme works).
    - Pack download + sync (`packDownloadService`, `syncEngine`).
-   - Voice input (Whisper) and photo-library attach.
+  - Photo-library selection, GPS consent, force-quit persistence, and reconnect sync.
 
 ---
 
@@ -75,9 +105,9 @@ the Core ML image-gen dependency). In order:
   Android `ganeshaparity` benchmark. There are Android instrumentation parity tests
   (`androidTest/.../ganeshaparity/MiewId*Test.kt`) but **no iOS XCTest equivalent yet** —
   re-ID accuracy/latency on iOS is currently unverified.
-- **Simulator vs device.** The iOS Simulator is x86/arm64 without a real NPU/Neural
-  Engine and can behave differently for ONNX Core ML EP and for the Core ML diffusion
-  module. Validate on physical hardware (A17 Pro-class per the README perf table).
+- **Simulator vs device.** The iOS Simulator is x86/arm64 without the same hardware
+  characteristics as a phone and can behave differently for ONNX execution providers.
+  Validate on the physical iPhones expected in the field.
 - **op-sqlite storage paths.** The embedding DB and observation storage must resolve to
   an iOS-writable dir (app sandbox / `RNFS.DocumentDirectoryPath`), not an Android
   external-storage path. Spot-check `services/database/connection.ts` and
@@ -87,13 +117,9 @@ the Core ML image-gen dependency). In order:
   code only gates on Android via `PermissionsAndroid`; on iOS it relies on the library's
   auto-prompt. Confirm the prompt appears; if not, add an iOS `requestAuthorization` call
   in `getDeviceLocation()`.
-- **Image generation split.** Android uses `LocalDreamModule` (QNN/MNN NPU); iOS uses
-  `CoreMLDiffusionModule` (Core ML). This is an intentional platform split, not a gap —
-  but if image-gen is in scope for parity, exercise it separately on iOS.
-
 ---
 
-## 4. Cosmetic / non-blocking
+## 4. Non-blocking follow-up
 
 - **App icon.** `ios/.../Images.xcassets/AppIcon.appiconset/` still holds the original
   Off Grid icons. Replace with EleBook artwork to match the Android rebrand (does not
@@ -104,9 +130,10 @@ the Core ML image-gen dependency). In order:
 
 ---
 
-## 5. Summary
+## 5. Acceptance boundary
 
-Getting today's Android build running on iOS is **realistic and mostly done**. The
-blocking source-level gaps (camera crash, OAuth redirect, identity) are fixed on this
-branch. What remains genuinely needs a Mac: `pod install`, signing, an on-device build,
-and verifying ONNX/Core ML inference parity for the wildlife models.
+The merged source-level changes are suitable for inclusion in a draft upstream pull
+request with this document linked as a known-limitations record. iOS becomes field-ready
+only after a clean Mac build and the complete physical-device workflow pass. Until then,
+the supported field path remains Android and affected iPhone users need named Android
+fallback devices.
