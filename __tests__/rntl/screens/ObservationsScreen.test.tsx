@@ -219,14 +219,16 @@ describe('ObservationsScreen', () => {
     expect(getByText('1 detection')).toBeTruthy();
   });
 
-  it('shows review status for partially reviewed observation', () => {
+  it('shows "Needs review" status when some detections are still pending', () => {
     mockObservations = [
       makeObservation({
         detections: [
           makeDetection({
             id: 'det-1',
             matchResult: {
-              topCandidates: [],
+              topCandidates: [
+                { individualId: 'ind-1', score: 0.9, source: 'pack', refPhotoIndex: 0 },
+              ],
               approvedIndividual: 'ind-1',
               reviewStatus: 'approved',
             },
@@ -251,34 +253,28 @@ describe('ObservationsScreen', () => {
       }),
     ];
     const { getByText } = render(<ObservationsScreen />);
-    expect(getByText('1/3 reviewed')).toBeTruthy();
+    expect(getByText('Needs review')).toBeTruthy();
   });
 
-  it('shows "All reviewed" when all detections are reviewed', () => {
+  it('shows "Ready to upload" once every detection is reviewed and eligible evidence remains local', () => {
     mockObservations = [
       makeObservation({
         detections: [
           makeDetection({
             id: 'det-1',
             matchResult: {
-              topCandidates: [],
+              topCandidates: [
+                { individualId: 'ind-1', score: 0.9, source: 'pack', refPhotoIndex: 0 },
+              ],
               approvedIndividual: 'ind-1',
               reviewStatus: 'approved',
-            },
-          }),
-          makeDetection({
-            id: 'det-2',
-            matchResult: {
-              topCandidates: [],
-              approvedIndividual: null,
-              reviewStatus: 'rejected',
             },
           }),
         ],
       }),
     ];
     const { getByText } = render(<ObservationsScreen />);
-    expect(getByText('All reviewed')).toBeTruthy();
+    expect(getByText('Ready to upload')).toBeTruthy();
   });
 
   it('renders multiple observations', () => {

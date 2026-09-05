@@ -3,12 +3,14 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -17,6 +19,7 @@ import { useThemedStyles, useTheme } from '../../theme';
 import { useWildlifeStore } from '../../stores';
 import type { RootStackParamList } from '../../navigation/types';
 import { toDisplayUri } from '../../utils/imageUri';
+import { SPACING } from '../../constants';
 import { BoundingBoxOverlay } from './BoundingBoxOverlay';
 import { createStyles } from './styles';
 
@@ -42,6 +45,7 @@ const getHeaderText = (count: number): string => {
 export const DetectionResultsScreen: React.FC = () => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<DetectionResultsRouteProp>();
   const { observationId } = route.params;
@@ -116,7 +120,10 @@ export const DetectionResultsScreen: React.FC = () => {
         <View style={styles.backButton} />
       </View>
 
-      <View style={styles.photoContainer}>
+      <KeyboardAvoidingView
+        style={styles.photoContainer}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         {observation?.photoUri ? (
           <Image
             source={{ uri: toDisplayUri(observation.photoUri) }}
@@ -134,9 +141,12 @@ export const DetectionResultsScreen: React.FC = () => {
             />
           ))}
         </View>
-      </View>
+      </KeyboardAvoidingView>
 
-      <View style={styles.footer}>
+      <View
+        style={[styles.footer, { paddingBottom: SPACING.md + insets.bottom }]}
+        testID="detection-results-footer"
+      >
         <Text style={styles.notesLabel}>Observation notes</Text>
         <TextInput
           value={notes}

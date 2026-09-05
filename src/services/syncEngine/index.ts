@@ -49,7 +49,14 @@ function isProvisionalIndividual(detection: Detection): boolean {
   return detection.matchResult.approvedIndividual?.startsWith('FIELD-') ?? false;
 }
 
-function eligibleDetections(observation: Observation): Detection[] {
+/**
+ * Detections still eligible to be (re)submitted: reviewed and approved
+ * (against either a pack individual or a provisional `FIELD-*` id), and not
+ * already carrying a Ganesha submission id from a prior attempt. Exported for
+ * reuse by the shared observation-presentation-status derivation, which needs
+ * the same "anything left to upload?" answer without duplicating the rules.
+ */
+export function eligibleDetections(observation: Observation): Detection[] {
   return observation.detections.filter(
     (detection) =>
       detection.matchResult.reviewStatus === 'approved' &&
@@ -58,7 +65,14 @@ function eligibleDetections(observation: Observation): Detection[] {
   );
 }
 
-function allSubmissionIds(observation: Observation): string[] {
+/**
+ * Every Ganesha submission id already recorded across this observation's
+ * detections. Exported for reuse by the shared observation-presentation
+ * status derivation to distinguish a real backend receipt ("Received by
+ * EleBook") from a `synced` queue row that never actually submitted anything
+ * ("Complete locally", e.g. every detection was rejected).
+ */
+export function allSubmissionIds(observation: Observation): string[] {
   return observation.detections
     .map((detection) => detection.ganeshaSubmissionId)
     .filter((id): id is string => id !== null);

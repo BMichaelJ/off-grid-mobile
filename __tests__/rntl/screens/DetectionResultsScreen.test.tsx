@@ -283,4 +283,28 @@ describe('DetectionResultsScreen', () => {
     });
     expect(mockGoBack).not.toHaveBeenCalled();
   });
+
+  // ==========================================================================
+  // Bottom inset (Android gesture/navigation bar regression)
+  // ==========================================================================
+
+  it('pushes the footer above the device bottom inset instead of a fixed padding', () => {
+    const { useSafeAreaInsets } = require('react-native-safe-area-context');
+    (useSafeAreaInsets as jest.Mock).mockReturnValue({
+      top: 0,
+      right: 0,
+      bottom: 48,
+      left: 0,
+    });
+
+    const { getByTestId } = render(<DetectionResultsScreen />);
+    const footer = getByTestId('detection-results-footer');
+    const flattened = Object.assign(
+      {},
+      ...(Array.isArray(footer.props.style)
+        ? footer.props.style
+        : [footer.props.style]),
+    );
+    expect(flattened.paddingBottom).toBeGreaterThanOrEqual(48);
+  });
 });

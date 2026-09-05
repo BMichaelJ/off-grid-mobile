@@ -188,6 +188,34 @@ export function useCaptureFlow() {
           throw saveError;
         }
 
+        // Queue the observation for sync now, not after review completes --
+        // syncObservation() already no-ops (returns 'waiting-for-review')
+        // until every detection has a decided reviewStatus, so it is safe to
+        // enqueue immediately. Without this, the observation is saved but
+        // permanently invisible to the Sync screen and "Sync All", since
+        // nothing else ever adds a sync_queue row. Best-effort: the
+        // observation itself is already durably saved above, so a
+        // queue-insert failure here must not delete the user's just-captured
+        // photo -- it only means the queue row will be missing until the
+        // next reconciliation.
+        try {
+          await useWildlifeStore.getState().addToSyncQueue({
+            observationId: result.observationId,
+            status: 'pending',
+            wildbookInstanceUrl: '',
+            retryCount: 0,
+            lastError: null,
+            lastAttempt: null,
+            syncedAt: null,
+            wildbookEncounterIds: [],
+          });
+        } catch (queueError) {
+          logger.error(
+            `[CaptureFlow] Failed to queue observation ${result.observationId} for sync:`,
+            queueError,
+          );
+        }
+
         navigation.navigate('DetectionResults', {
           observationId: result.observationId,
         });

@@ -75,6 +75,16 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     ...TYPOGRAPHY.meta,
     color: colors.textMuted,
   },
+  statusRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: SPACING.xs,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
   emptyState: {
     flex: 1,
     justifyContent: 'center' as const,

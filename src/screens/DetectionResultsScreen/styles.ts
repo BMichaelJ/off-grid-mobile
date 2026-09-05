@@ -37,7 +37,7 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   footer: {
     paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
+    paddingTop: SPACING.md,
     gap: SPACING.sm,
   },
   notesLabel: {

@@ -6,11 +6,13 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/Feather';
 import { AnimatedListItem } from '../../components';
 import { Card } from '../../components';
-import { useThemedStyles } from '../../theme/useThemedStyles';
+import { useThemedStyles, useTheme } from '../../theme';
 import { useWildlifeStore } from '../../stores/wildlifeStore';
 import type { RootStackParamList } from '../../navigation/types';
 import type { Observation, SyncQueueItem } from '../../types/wildlife';
 import { toDisplayUri } from '../../utils/imageUri';
+import { getObservationStatusPresentation } from '../../services/observationStatus';
+import { getObservationStatusColor } from '../../utils/observationStatusColors';
 import { createStyles } from './styles';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -40,20 +42,6 @@ function getDetectionCountText(count: number): string {
     return '1 detection';
   }
   return `${count} detections`;
-}
-
-function getReviewStatusText(observation: Observation): string {
-  const total = observation.detections.length;
-  if (total === 0) {
-    return 'No detections';
-  }
-  const reviewed = observation.detections.filter(
-    d => d.matchResult.reviewStatus !== 'pending',
-  ).length;
-  if (reviewed === total) {
-    return 'All reviewed';
-  }
-  return `${reviewed}/${total} reviewed`;
 }
 
 function isPendingReview(observation: Observation): boolean {
@@ -96,6 +84,7 @@ function filterObservations(
 
 export const ObservationsScreen: React.FC = () => {
   const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const navigation = useNavigation<NavigationProp>();
   const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
 
@@ -115,40 +104,55 @@ export const ObservationsScreen: React.FC = () => {
   );
 
   const renderObservation = useCallback(
-    ({ item, index }: { item: Observation; index: number }) => (
-      <AnimatedListItem
-        index={index}
-        onPress={() => handleObservationPress(item.id)}
-        testID={`observation-card-${index}`}
-      >
-        <Card>
-          <View style={styles.row}>
-            <Image
-              source={{ uri: toDisplayUri(item.photoUri) }}
-              style={styles.thumbnail}
-              testID={`observation-thumbnail-${index}`}
-            />
-            <View style={styles.rowContent}>
-              <Text style={styles.timestamp}>
-                {formatTimestamp(item.timestamp)}
-              </Text>
-              <Text style={styles.detectionCount}>
-                {getDetectionCountText(item.detections.length)}
-              </Text>
-              <Text style={styles.reviewStatus}>
-                {getReviewStatusText(item)}
-              </Text>
+    ({ item, index }: { item: Observation; index: number }) => {
+      const syncItem = syncQueue.find(s => s.observationId === item.id);
+      const presentation = getObservationStatusPresentation(item, syncItem);
+      const statusColor = getObservationStatusColor(colors, presentation.severity);
+
+      return (
+        <AnimatedListItem
+          index={index}
+          onPress={() => handleObservationPress(item.id)}
+          testID={`observation-card-${index}`}
+        >
+          <Card>
+            <View style={styles.row}>
+              <Image
+                source={{ uri: toDisplayUri(item.photoUri) }}
+                style={styles.thumbnail}
+                testID={`observation-thumbnail-${index}`}
+              />
+              <View style={styles.rowContent}>
+                <Text style={styles.timestamp}>
+                  {formatTimestamp(item.timestamp)}
+                </Text>
+                <Text style={styles.detectionCount}>
+                  {getDetectionCountText(item.detections.length)}
+                </Text>
+                <View style={styles.statusRow}>
+                  <View
+                    style={[styles.statusDot, { backgroundColor: statusColor }]}
+                    testID={`observation-status-dot-${index}`}
+                  />
+                  <Text
+                    style={[styles.reviewStatus, { color: statusColor }]}
+                    testID={`observation-status-label-${index}`}
+                  >
+                    {presentation.label}
+                  </Text>
+                </View>
+              </View>
+              <Icon
+                name="chevron-right"
+                size={18}
+                color={styles.reviewStatus.color}
+              />
             </View>
-            <Icon
-              name="chevron-right"
-              size={18}
-              color={styles.reviewStatus.color}
-            />
-          </View>
-        </Card>
-      </AnimatedListItem>
-    ),
-    [handleObservationPress, styles],
+          </Card>
+        </AnimatedListItem>
+      );
+    },
+    [handleObservationPress, styles, syncQueue, colors],
   );
 
   const keyExtractor = useCallback((item: Observation) => item.id, []);

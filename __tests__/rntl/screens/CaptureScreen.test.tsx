@@ -340,6 +340,24 @@ describe('CaptureScreen', () => {
     });
   });
 
+  it('queues the new observation for sync so it is not silently unreachable from the Sync screen', async () => {
+    const { getByTestId } = render(<CaptureScreen />);
+    fireEvent.press(getByTestId('take-photo-button'));
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalled();
+    });
+
+    const queueItem = useWildlifeStore
+      .getState()
+      .syncQueue.find(item => item.observationId === 'obs-123');
+    expect(queueItem).toMatchObject({
+      observationId: 'obs-123',
+      status: 'pending',
+      retryCount: 0,
+    });
+  });
+
   it('saves GPS coordinates in observation when location permission is granted', async () => {
     const { getByTestId } = render(<CaptureScreen />);
     fireEvent.press(getByTestId('take-photo-button'));

@@ -4,11 +4,14 @@
  * Tests for the sync queue screen including:
  * - Screen renders with correct testID
  * - Header title "Sync Queue"
- * - Sync All / Retry delegate to services/syncEngine (mocked here; the
- *   engine itself has its own unit tests)
- * - Sync queue item rendering with status indicators
- * - Retry button for failed items
- * - Error message display
+ * - Sync All delegates to services/syncEngine (mocked here; the engine
+ *   itself has its own unit tests)
+ * - Sync queue rows show a recognizable observation summary (thumbnail,
+ *   capture time, identity/detection count, notes preview) and the shared
+ *   observation-presentation status instead of a GUID-first raw status
+ * - Per-status primary action (Continue review / Upload observation / Retry)
+ * - Technical details disclosure hides the raw observation id by default
+ * - Orphaned queue rows (no matching observation) degrade gracefully
  * - Empty state
  */
 
@@ -17,12 +20,20 @@ import { Alert } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { useWildlifeStore } from '../../../src/stores/wildlifeStore';
 import { initDatabase } from '../../../src/services/database';
-import type { SyncQueueItem } from '../../../src/types/wildlife';
+import type { Detection, MatchCandidate, SyncQueueItem } from '../../../src/types/wildlife';
 import type { Observation } from '../../../src/types';
 
-jest.mock('../../../src/services/syncEngine', () => ({
-  syncAllObservations: jest.fn(),
-  syncObservation: jest.fn(),
+jest.mock('../../../src/services/syncEngine', () => {
+  const actual = jest.requireActual('../../../src/services/syncEngine');
+  return {
+    ...actual,
+    syncAllObservations: jest.fn(),
+    syncObservation: jest.fn(),
+  };
+});
+
+jest.mock('../../../src/services/packManager', () => ({
+  packManager: { loadPackIndex: jest.fn() },
 }));
 
 jest.mock('../../../src/utils/authGate', () => ({
@@ -33,12 +44,13 @@ jest.mock('../../../src/utils/authGate', () => ({
 // Mocks
 // ---------------------------------------------------------------------------
 
+const mockNavigate = jest.fn();
 jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
   return {
     ...actual,
     useNavigation: () => ({
-      navigate: jest.fn(),
+      navigate: mockNavigate,
       goBack: jest.fn(),
       setOptions: jest.fn(),
       addListener: jest.fn(() => jest.fn()),
@@ -74,7 +86,7 @@ const mockSyncObservation = syncObservation as jest.Mock;
 const mockEnsureSignedIn = ensureSignedIn as jest.Mock;
 
 // ---------------------------------------------------------------------------
-// Factory helper
+// Factory helpers
 // ---------------------------------------------------------------------------
 
 const createSyncItem = (
@@ -82,7 +94,7 @@ const createSyncItem = (
 ): SyncQueueItem => ({
   observationId: 'obs-abc123def456',
   status: 'pending',
-  wildbookInstanceUrl: 'https://flukebook.org',
+  wildbookInstanceUrl: '',
   retryCount: 0,
   lastError: null,
   lastAttempt: null,
@@ -91,15 +103,48 @@ const createSyncItem = (
   ...overrides,
 });
 
+const createCandidate = (overrides: Partial<MatchCandidate> = {}): MatchCandidate => ({
+  individualId: 'elephant-thomas',
+  score: 0.95,
+  source: 'pack',
+  refPhotoIndex: 0,
+  ...overrides,
+});
+
+const createDetection = (overrides: Partial<Detection> = {}): Detection => ({
+  id: 'det-1',
+  observationId: 'obs-abc123def456',
+  boundingBox: { x: 0.1, y: 0.2, width: 0.3, height: 0.4 },
+  species: 'elephant',
+  speciesConfidence: 0.95,
+  croppedImageUri: '/data/crops/det-1.jpg',
+  embedding: [0.1, 0.2, 0.3],
+  matchResult: {
+    topCandidates: [createCandidate()],
+    approvedIndividual: 'elephant-thomas',
+    reviewStatus: 'approved',
+  },
+  encounterFields: {
+    locationId: null,
+    sex: null,
+    lifeStage: null,
+    behavior: null,
+    submitterId: null,
+    projectId: null,
+  },
+  ganeshaSubmissionId: null,
+  ...overrides,
+});
+
 const createObservation = (overrides: Partial<Observation> = {}): Observation => ({
   id: 'obs-abc123def456',
   photoUri: 'file:///photo.jpg',
   gps: null,
-  timestamp: '2025-01-01T00:00:00Z',
+  timestamp: '2026-08-23T10:00:00Z',
   deviceInfo: { model: 'test', os: 'test' },
   fieldNotes: null,
-  detections: [],
-  createdAt: '2025-01-01T00:00:00Z',
+  detections: [createDetection()],
+  createdAt: '2026-08-23T10:00:00Z',
   ...overrides,
 });
 
@@ -114,7 +159,12 @@ describe('SyncScreen', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    useWildlifeStore.setState({ syncQueue: [], observations: [] });
+    useWildlifeStore.setState({
+      syncQueue: [],
+      observations: [],
+      packs: [],
+      localIndividuals: [],
+    });
     mockEnsureSignedIn.mockResolvedValue(true);
   });
 
@@ -176,127 +226,171 @@ describe('SyncScreen', () => {
   });
 
   // ==========================================================================
-  // Sync queue items
+  // Recognizable observation summaries (thumbnail, time, identity, notes)
   // ==========================================================================
 
-  it('shows sync queue items with status', () => {
-    const items = [
-      createSyncItem({ observationId: 'obs-111', status: 'pending' }),
-      createSyncItem({ observationId: 'obs-222', status: 'synced' }),
-    ];
-    useWildlifeStore.setState({ syncQueue: items });
+  it('shows a recognizable summary instead of a GUID-first row', () => {
+    useWildlifeStore.setState({
+      syncQueue: [createSyncItem()],
+      observations: [
+        createObservation({ fieldNotes: 'Seen near the eastern waterhole, calm herd.' }),
+      ],
+    });
 
-    const { getByTestId } = render(<SyncScreen />);
-    expect(getByTestId('sync-item-0')).toBeTruthy();
-    expect(getByTestId('sync-item-1')).toBeTruthy();
+    const { getByTestId, getByText, queryByText } = render(<SyncScreen />);
+    expect(getByTestId('sync-thumbnail-0')).toBeTruthy();
+    expect(getByTestId('sync-identity-0')).toBeTruthy();
+    expect(getByText('Seen near the eastern waterhole, calm herd.')).toBeTruthy();
+    // Raw GUID must not be visible until technical details is expanded.
+    expect(queryByText('obs-abc123def456')).toBeNull();
   });
 
-  it('shows pending status indicator', () => {
+  it('hides the raw observation id under a technical details toggle until expanded', () => {
+    useWildlifeStore.setState({
+      syncQueue: [createSyncItem({ observationId: 'obs-abc123def456' })],
+      observations: [createObservation({ id: 'obs-abc123def456' })],
+    });
+
+    const { getByTestId, getByText, queryByText } = render(<SyncScreen />);
+    expect(queryByText('obs-abc123def456')).toBeNull();
+
+    fireEvent.press(getByTestId('sync-technical-toggle-0'));
+    expect(getByText('obs-abc123def456')).toBeTruthy();
+
+    fireEvent.press(getByTestId('sync-technical-toggle-0'));
+    expect(queryByText('obs-abc123def456')).toBeNull();
+  });
+
+  it('shows the identity summary with the detection count', () => {
+    useWildlifeStore.setState({
+      syncQueue: [createSyncItem()],
+      observations: [createObservation()],
+    });
+
+    const { getByTestId } = render(<SyncScreen />);
+    expect(getByTestId('sync-identity-0').props.children).toContain('1 detection');
+  });
+
+  // ==========================================================================
+  // Shared status per row
+  // ==========================================================================
+
+  it('shows "Needs review" with a "Continue review" action for unreviewed detections', () => {
     useWildlifeStore.setState({
       syncQueue: [createSyncItem({ status: 'pending' })],
+      observations: [
+        createObservation({
+          detections: [
+            createDetection({
+              id: 'det-pending',
+              matchResult: { topCandidates: [], approvedIndividual: null, reviewStatus: 'pending' },
+            }),
+          ],
+        }),
+      ],
     });
 
-    const { getByTestId, getByText } = render(<SyncScreen />);
-    expect(getByTestId('sync-status-pending')).toBeTruthy();
-    expect(getByText('Pending')).toBeTruthy();
+    const { getByText } = render(<SyncScreen />);
+    expect(getByText('Needs review')).toBeTruthy();
+    expect(getByText('Continue review')).toBeTruthy();
   });
 
-  it('shows synced status indicator', () => {
+  it('"Continue review" navigates to MatchReview for the first pending detection', () => {
     useWildlifeStore.setState({
-      syncQueue: [createSyncItem({ status: 'synced' })],
-    });
-
-    const { getByTestId, getByText } = render(<SyncScreen />);
-    expect(getByTestId('sync-status-synced')).toBeTruthy();
-    expect(getByText('Synced')).toBeTruthy();
-  });
-
-  it('shows failed status indicator', () => {
-    useWildlifeStore.setState({
-      syncQueue: [createSyncItem({ status: 'failed' })],
-    });
-
-    const { getByTestId, getByText } = render(<SyncScreen />);
-    expect(getByTestId('sync-status-failed')).toBeTruthy();
-    expect(getByText('Failed')).toBeTruthy();
-  });
-
-  // ==========================================================================
-  // Retry button
-  // ==========================================================================
-
-  it('shows retry button for failed items', () => {
-    useWildlifeStore.setState({
-      syncQueue: [createSyncItem({ status: 'failed' })],
+      syncQueue: [createSyncItem({ observationId: 'obs-review' })],
+      observations: [
+        createObservation({
+          id: 'obs-review',
+          detections: [
+            createDetection({
+              id: 'det-pending',
+              observationId: 'obs-review',
+              matchResult: { topCandidates: [], approvedIndividual: null, reviewStatus: 'pending' },
+            }),
+          ],
+        }),
+      ],
     });
 
     const { getByTestId } = render(<SyncScreen />);
-    expect(getByTestId('sync-retry-0')).toBeTruthy();
+    fireEvent.press(getByTestId('sync-action-0'));
+
+    expect(mockNavigate).toHaveBeenCalledWith('MatchReview', {
+      observationId: 'obs-review',
+      detectionId: 'det-pending',
+    });
   });
 
-  it('does not show retry button for pending items', () => {
+  it('shows "Ready to upload" with an "Upload observation" action once reviewed', () => {
     useWildlifeStore.setState({
       syncQueue: [createSyncItem({ status: 'pending' })],
+      observations: [createObservation()],
     });
 
-    const { queryByTestId } = render(<SyncScreen />);
-    expect(queryByTestId('sync-retry-0')).toBeNull();
+    const { getByText } = render(<SyncScreen />);
+    expect(getByText('Ready to upload')).toBeTruthy();
+    expect(getByText('Upload observation')).toBeTruthy();
   });
 
-  it('does not show retry button for synced items', () => {
+  it('"Upload observation" calls the sync engine for that observation', async () => {
+    mockSyncObservation.mockResolvedValue({ observationId: 'obs-abc123def456', status: 'synced', submittedCount: 1 });
     useWildlifeStore.setState({
-      syncQueue: [createSyncItem({ status: 'synced' })],
+      syncQueue: [createSyncItem({ status: 'pending' })],
+      observations: [createObservation()],
     });
-
-    const { queryByTestId } = render(<SyncScreen />);
-    expect(queryByTestId('sync-retry-0')).toBeNull();
-  });
-
-  it('retry button re-attempts sync for that observation via the sync engine', async () => {
-    const item = createSyncItem({
-      observationId: 'obs-fail',
-      status: 'failed',
-      retryCount: 2,
-    });
-    useWildlifeStore.setState({
-      syncQueue: [item],
-      observations: [createObservation({ id: 'obs-fail' })],
-    });
-    mockSyncObservation.mockResolvedValue({ observationId: 'obs-fail', status: 'synced', submittedCount: 1 });
 
     const { getByTestId } = render(<SyncScreen />);
-    fireEvent.press(getByTestId('sync-retry-0'));
+    fireEvent.press(getByTestId('sync-action-0'));
 
     await waitFor(() =>
       expect(mockSyncObservation).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 'obs-fail' }),
+        expect.objectContaining({ id: 'obs-abc123def456' }),
       ),
     );
   });
 
-  it('retry does not sync when not signed in', async () => {
-    mockEnsureSignedIn.mockResolvedValue(false);
-    const item = createSyncItem({ observationId: 'obs-fail', status: 'failed' });
+  it('shows "Received by EleBook" with receipt details once acknowledged', () => {
     useWildlifeStore.setState({
-      syncQueue: [item],
-      observations: [createObservation({ id: 'obs-fail' })],
+      syncQueue: [
+        createSyncItem({
+          status: 'synced',
+          syncedAt: '2026-08-23T11:00:00Z',
+          wildbookEncounterIds: ['sub-1'],
+        }),
+      ],
+      observations: [
+        createObservation({
+          detections: [createDetection({ ganeshaSubmissionId: 'sub-1' })],
+        }),
+      ],
     });
 
-    const { getByTestId } = render(<SyncScreen />);
-    fireEvent.press(getByTestId('sync-retry-0'));
-
-    await waitFor(() => expect(mockEnsureSignedIn).toHaveBeenCalled());
-    expect(mockSyncObservation).not.toHaveBeenCalled();
+    const { getByText, queryByTestId } = render(<SyncScreen />);
+    expect(getByText('Received by EleBook')).toBeTruthy();
+    expect(getByText(/1 submission\(s\) received/)).toBeTruthy();
+    // Informational only -- no action button for an already-received row.
+    expect(queryByTestId('sync-action-0')).toBeNull();
   });
 
-  it('retry button alerts with the failure message when the retry fails again', async () => {
-    const item = createSyncItem({ observationId: 'obs-fail', status: 'failed' });
+  it('shows "Upload failed" with a Retry action and the error message', () => {
     useWildlifeStore.setState({
-      syncQueue: [item],
-      observations: [createObservation({ id: 'obs-fail' })],
+      syncQueue: [createSyncItem({ status: 'failed', lastError: 'Network timeout' })],
+      observations: [createObservation()],
+    });
+
+    const { getByText } = render(<SyncScreen />);
+    expect(getByText('Upload failed')).toBeTruthy();
+    expect(getByText('Retry')).toBeTruthy();
+    expect(getByText('Network timeout')).toBeTruthy();
+  });
+
+  it('retry re-attempts sync via the sync engine and alerts on repeated failure', async () => {
+    useWildlifeStore.setState({
+      syncQueue: [createSyncItem({ status: 'failed' })],
+      observations: [createObservation()],
     });
     mockSyncObservation.mockResolvedValue({
-      observationId: 'obs-fail',
+      observationId: 'obs-abc123def456',
       status: 'failed',
       submittedCount: 0,
       message: 'blob upload failed: HTTP 500',
@@ -304,38 +398,70 @@ describe('SyncScreen', () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 
     const { getByTestId } = render(<SyncScreen />);
-    fireEvent.press(getByTestId('sync-retry-0'));
+    fireEvent.press(getByTestId('sync-action-0'));
 
     await waitFor(() =>
       expect(alertSpy).toHaveBeenCalledWith('Sync failed', 'blob upload failed: HTTP 500'),
     );
   });
 
-  // ==========================================================================
-  // Error messages
-  // ==========================================================================
-
-  it('shows error message for failed items', () => {
+  it('retry does not sync when not signed in', async () => {
+    mockEnsureSignedIn.mockResolvedValue(false);
     useWildlifeStore.setState({
-      syncQueue: [
-        createSyncItem({
-          status: 'failed',
-          lastError: 'Network timeout',
+      syncQueue: [createSyncItem({ status: 'failed' })],
+      observations: [createObservation()],
+    });
+
+    const { getByTestId } = render(<SyncScreen />);
+    fireEvent.press(getByTestId('sync-action-0'));
+
+    await waitFor(() => expect(mockEnsureSignedIn).toHaveBeenCalled());
+    expect(mockSyncObservation).not.toHaveBeenCalled();
+  });
+
+  it('shows "Needs attention" once the retry policy is exhausted, with a manual retry action', () => {
+    useWildlifeStore.setState({
+      syncQueue: [createSyncItem({ status: 'failedPermanent', retryCount: 5 })],
+      observations: [createObservation()],
+    });
+
+    const { getByText } = render(<SyncScreen />);
+    expect(getByText('Needs attention')).toBeTruthy();
+    expect(getByText('Review and retry')).toBeTruthy();
+  });
+
+  it('shows "Complete locally" with no action when nothing was ever eligible to upload', () => {
+    useWildlifeStore.setState({
+      syncQueue: [createSyncItem({ status: 'synced' })],
+      observations: [
+        createObservation({
+          detections: [
+            createDetection({
+              matchResult: { topCandidates: [], approvedIndividual: null, reviewStatus: 'rejected' },
+            }),
+          ],
         }),
       ],
     });
 
-    const { getByText } = render(<SyncScreen />);
-    expect(getByText('Network timeout')).toBeTruthy();
+    const { getByText, queryByTestId } = render(<SyncScreen />);
+    expect(getByText('Complete locally')).toBeTruthy();
+    expect(queryByTestId('sync-action-0')).toBeNull();
   });
 
-  it('does not show error text when lastError is null', () => {
+  // ==========================================================================
+  // Orphaned queue rows (no matching observation)
+  // ==========================================================================
+
+  it('degrades gracefully for a queue row with no matching observation', () => {
     useWildlifeStore.setState({
-      syncQueue: [createSyncItem({ status: 'pending', lastError: null })],
+      syncQueue: [createSyncItem({ observationId: 'obs-missing', status: 'pending' })],
+      observations: [],
     });
 
-    const { queryByTestId } = render(<SyncScreen />);
-    expect(queryByTestId('sync-error-0')).toBeNull();
+    const { getByTestId, getByText } = render(<SyncScreen />);
+    expect(getByTestId('sync-item-0')).toBeTruthy();
+    expect(getByText('Pending')).toBeTruthy();
   });
 
   // ==========================================================================
@@ -352,33 +478,10 @@ describe('SyncScreen', () => {
   it('does not show empty state when queue has items', () => {
     useWildlifeStore.setState({
       syncQueue: [createSyncItem()],
+      observations: [createObservation()],
     });
 
     const { queryByText } = render(<SyncScreen />);
     expect(queryByText('No items in sync queue')).toBeNull();
-  });
-
-  // ==========================================================================
-  // Observation ID truncation
-  // ==========================================================================
-
-  it('truncates long observation IDs', () => {
-    useWildlifeStore.setState({
-      syncQueue: [
-        createSyncItem({ observationId: 'obs-abc123def456' }),
-      ],
-    });
-
-    const { getByText } = render(<SyncScreen />);
-    expect(getByText('obs-abc123de...')).toBeTruthy();
-  });
-
-  it('shows full ID when short enough', () => {
-    useWildlifeStore.setState({
-      syncQueue: [createSyncItem({ observationId: 'obs-short' })],
-    });
-
-    const { getByText } = render(<SyncScreen />);
-    expect(getByText('obs-short')).toBeTruthy();
   });
 });
