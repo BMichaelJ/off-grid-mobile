@@ -1,7 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { View, Text, FlatList, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AnimatedListItem } from '../components/AnimatedListItem';
 import { Card } from '../components/Card';
@@ -15,7 +15,10 @@ import type { RootStackParamList } from '../navigation/types';
 import { GANESHA_PROJECT_ID } from '../config/ganeshaApi';
 import { resolveMiewidModelSource } from '../services/modelSourceResolver';
 import { prepareMiewidModel } from '../services/miewidModelManager';
-import { acquireLatestPack } from '../services/packDownloadService';
+import {
+  acquireLatestPack,
+  checkLatestPackStatus,
+} from '../services/packDownloadService';
 import { ensureSignedIn } from '../utils/authGate';
 import logger from '../utils/logger';
 
@@ -24,6 +27,13 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 const KB = 1024;
 const MB = KB * 1024;
 const GB = MB * 1024;
+
+type PackUpdateState =
+  | 'unchecked'
+  | 'checking'
+  | 'current'
+  | 'available'
+  | 'unavailable';
 
 function formatBytes(bytes: number): string {
   if (bytes < MB) {
@@ -44,11 +54,45 @@ export const PacksScreen: React.FC = () => {
   const styles = useThemedStyles(createStyles);
   const { packs, miewidModel } = useWildlifeStore();
   const [isDownloading, setIsDownloading] = useState(false);
+  const [packUpdateState, setPackUpdateState] =
+    useState<PackUpdateState>('unchecked');
   const updateInFlight = useRef(false);
+  const statusRequest = useRef(0);
+  const installedProjectPack = packs.find(
+    pack => pack.id === GANESHA_PROJECT_ID,
+  );
 
   const handlePackPress = (pack: EmbeddingPack) => {
     navigation.navigate('PackDetails', { packId: pack.id });
   };
+
+  const refreshPackStatus = useCallback(async () => {
+    if (!installedProjectPack) {
+      setPackUpdateState('unchecked');
+      return;
+    }
+    const request = ++statusRequest.current;
+    setPackUpdateState('checking');
+    const result = await checkLatestPackStatus(
+      GANESHA_PROJECT_ID,
+      installedProjectPack,
+    );
+    if (request !== statusRequest.current) {
+      return;
+    }
+    setPackUpdateState(
+      result.ok ? (result.isLatest ? 'current' : 'available') : 'unavailable',
+    );
+  }, [installedProjectPack]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshPackStatus();
+      return () => {
+        statusRequest.current += 1;
+      };
+    }, [refreshPackStatus]),
+  );
 
   const handleDownloadPack = useCallback(async () => {
     if (updateInFlight.current) {
@@ -60,7 +104,6 @@ export const PacksScreen: React.FC = () => {
       if (!(await ensureSignedIn(navigation))) {
         return;
       }
-
       const resolvedSource = await resolveMiewidModelSource();
       if (!resolvedSource.ok) {
         Alert.alert(
@@ -69,7 +112,6 @@ export const PacksScreen: React.FC = () => {
         );
         return;
       }
-
       const installedModelIsCurrent =
         miewidModel?.status === 'ready' &&
         miewidModel.version === resolvedSource.source.version &&
@@ -102,6 +144,7 @@ export const PacksScreen: React.FC = () => {
         );
         return;
       }
+      setPackUpdateState('current');
       logger.log(`[PacksScreen] Installed pack ${packResult.pack.id}`);
     } catch (error) {
       logger.error('[PacksScreen] Unexpected pack update failure:', error);
@@ -114,6 +157,44 @@ export const PacksScreen: React.FC = () => {
       setIsDownloading(false);
     }
   }, [miewidModel, navigation]);
+
+  const handlePackStatusCheck = useCallback(async () => {
+    if (updateInFlight.current) {
+      return;
+    }
+    updateInFlight.current = true;
+    try {
+      if (await ensureSignedIn(navigation)) {
+        await refreshPackStatus();
+      }
+    } catch (error) {
+      logger.error('[PacksScreen] Pack status check failed:', error);
+      setPackUpdateState('unavailable');
+    } finally {
+      updateInFlight.current = false;
+    }
+  }, [navigation, refreshPackStatus]);
+
+  const updateStatusText = isDownloading
+    ? 'Downloading and validating update...'
+    : packUpdateState === 'checking'
+      ? 'Checking for updates...'
+      : packUpdateState === 'current'
+        ? 'Up to date'
+        : packUpdateState === 'available'
+          ? 'Update available'
+          : packUpdateState === 'unavailable'
+            ? 'Unable to check for updates'
+            : 'Update status not checked';
+
+  const updateButtonTitle =
+    packUpdateState === 'current'
+      ? 'Check Again'
+      : packUpdateState === 'available'
+        ? 'Update to Latest Pack'
+        : packUpdateState === 'checking'
+          ? 'Checking for Updates'
+          : 'Check for Updates';
 
   const renderPack = ({
     item,
@@ -171,13 +252,26 @@ export const PacksScreen: React.FC = () => {
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
           ListFooterComponent={
-            <Button
-              title="Update to Latest Pack"
-              onPress={handleDownloadPack}
-              loading={isDownloading}
-              style={styles.updateButton}
-              testID="update-pack-button"
-            />
+            <View style={styles.updateSection}>
+              <Text
+                style={styles.updateStatus}
+                accessibilityLiveRegion="polite"
+                testID="pack-update-status"
+              >
+                {updateStatusText}
+              </Text>
+              <Button
+                title={updateButtonTitle}
+                onPress={
+                  packUpdateState === 'available'
+                    ? handleDownloadPack
+                    : handlePackStatusCheck
+                }
+                loading={isDownloading || packUpdateState === 'checking'}
+                style={styles.updateButton}
+                testID="update-pack-button"
+              />
+            </View>
           }
         />
       )}
@@ -206,8 +300,16 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   list: {
     padding: SPACING.lg,
   },
-  updateButton: {
+  updateSection: {
     marginTop: SPACING.lg,
+  },
+  updateStatus: {
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.textSecondary,
+    textAlign: 'center' as const,
+  },
+  updateButton: {
+    marginTop: SPACING.sm,
   },
   packName: {
     ...TYPOGRAPHY.h2,

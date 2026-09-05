@@ -1,4 +1,7 @@
-import { acquireLatestPack } from '../../../src/services/packDownloadService';
+import {
+  acquireLatestPack,
+  checkLatestPackStatus,
+} from '../../../src/services/packDownloadService';
 import { useWildlifeStore } from '../../../src/stores/wildlifeStore';
 import type {
   EmbeddingPack,
@@ -571,5 +574,30 @@ describe('acquireLatestPack', () => {
     await acquireLatestPack(PROJECT_ID);
 
     expect(mockMkdir).toHaveBeenCalledWith('/mock/documents/pack_downloads');
+  });
+});
+
+describe('checkLatestPackStatus', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('compares both version and normalized archive SHA without downloading', async () => {
+    const installed = makeInstalledPack({
+      packVersion: '2026-08-22T12:38:40Z',
+      artifactSha256: PACK_SHA,
+      status: 'ready',
+    });
+    mockGetLatestPack.mockResolvedValue({
+      ok: true,
+      data: makePackInfo({ sha256: PACK_SHA.toUpperCase() }),
+    });
+
+    await expect(checkLatestPackStatus(PROJECT_ID, installed)).resolves.toEqual({
+      ok: true,
+      isLatest: true,
+      latestVersion: '2026-08-22T12:38:40Z',
+    });
+    expect(mockDownload).not.toHaveBeenCalled();
   });
 });

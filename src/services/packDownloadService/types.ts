@@ -21,3 +21,16 @@ export type PackAcquisitionOutcome =
       message: string;
       httpStatus?: number;
     };
+
+export type PackUpdateCheckOutcome =
+  | {
+      ok: true;
+      isLatest: boolean;
+      latestVersion: string;
+    }
+  | {
+      ok: false;
+      code: GaneshaApiErrorCode | 'metadata-invalid' | 'unexpected-error';
+      message: string;
+      httpStatus?: number;
+    };

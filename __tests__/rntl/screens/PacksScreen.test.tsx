@@ -78,6 +78,7 @@ jest.mock('../../../src/services/miewidModelManager', () => ({
 
 jest.mock('../../../src/services/packDownloadService', () => ({
   acquireLatestPack: jest.fn(),
+  checkLatestPackStatus: jest.fn(),
 }));
 
 jest.mock('../../../src/utils/authGate', () => ({
@@ -85,14 +86,20 @@ jest.mock('../../../src/utils/authGate', () => ({
 }));
 
 import { PacksScreen } from '../../../src/screens/PacksScreen';
+import { useFocusEffect as navigationUseFocusEffect } from '@react-navigation/native';
 import { resolveMiewidModelSource } from '../../../src/services/modelSourceResolver';
 import { prepareMiewidModel } from '../../../src/services/miewidModelManager';
-import { acquireLatestPack } from '../../../src/services/packDownloadService';
+import {
+  acquireLatestPack,
+  checkLatestPackStatus,
+} from '../../../src/services/packDownloadService';
 import { ensureSignedIn } from '../../../src/utils/authGate';
 
 const mockResolveMiewidModelSource = resolveMiewidModelSource as jest.Mock;
+const mockUseFocusEffect = navigationUseFocusEffect as jest.Mock;
 const mockPrepareMiewidModel = prepareMiewidModel as jest.Mock;
 const mockAcquireLatestPack = acquireLatestPack as jest.Mock;
+const mockCheckLatestPackStatus = checkLatestPackStatus as jest.Mock;
 const mockEnsureSignedIn = ensureSignedIn as jest.Mock;
 
 // ---------------------------------------------------------------------------
@@ -141,6 +148,7 @@ const latestModelSource = {
 describe('PacksScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUseFocusEffect.mockImplementation(() => undefined);
     useWildlifeStore.setState({ packs: [], miewidModel: null });
     mockEnsureSignedIn.mockResolvedValue(true);
     mockResolveMiewidModelSource.mockResolvedValue({
@@ -333,6 +341,37 @@ describe('PacksScreen', () => {
   // Download and update actions
   // ==========================================================================
   describe('download button', () => {
+    it('reports that the installed pack is up to date without downloading it', async () => {
+      const installedPack = createPack({
+        id: 'proj_kariega',
+        packVersion: '2026-09-05T11:06:39Z',
+        artifactSha256: 'pack-sha',
+        status: 'ready',
+      });
+      useWildlifeStore.setState({
+        packs: [installedPack],
+        miewidModel: readyModel,
+      });
+      mockCheckLatestPackStatus.mockResolvedValue({
+        ok: true,
+        isLatest: true,
+        latestVersion: installedPack.packVersion,
+      });
+      let focusCallback: (() => void) | undefined;
+      mockUseFocusEffect.mockImplementation(callback => {
+        focusCallback = callback;
+      });
+
+      const { getByText, getByTestId } = render(<PacksScreen />);
+      act(() => focusCallback?.());
+
+      await waitFor(() => expect(getByText('Up to date')).toBeTruthy());
+      expect(getByTestId('update-pack-button').props.accessibilityLabel).toBe(
+        'Check Again',
+      );
+      expect(mockAcquireLatestPack).not.toHaveBeenCalled();
+    });
+
     it('shows download when empty and update when a pack is installed', async () => {
       const { getByTestId, queryByTestId } = render(<PacksScreen />);
       expect(getByTestId('download-pack-button')).toBeTruthy();
@@ -346,9 +385,15 @@ describe('PacksScreen', () => {
     });
 
     it('updates an installed pack through the latest-pack acquisition flow', async () => {
+      const installedPack = createPack({ id: 'proj_kariega' });
       useWildlifeStore.setState({
-        packs: [createPack()],
+        packs: [installedPack],
         miewidModel: readyModel,
+      });
+      mockCheckLatestPackStatus.mockResolvedValue({
+        ok: true,
+        isLatest: false,
+        latestVersion: '2026-09-05T11:06:39Z',
       });
       mockAcquireLatestPack.mockResolvedValue({
         ok: true,
@@ -357,8 +402,14 @@ describe('PacksScreen', () => {
           individualCount: 66,
         }),
       });
+      let focusCallback: (() => void) | undefined;
+      mockUseFocusEffect.mockImplementation(callback => {
+        focusCallback = callback;
+      });
 
-      const { getByTestId } = render(<PacksScreen />);
+      const { getByTestId, getByText } = render(<PacksScreen />);
+      act(() => focusCallback?.());
+      await waitFor(() => expect(getByText('Update available')).toBeTruthy());
       fireEvent.press(getByTestId('update-pack-button'));
 
       await waitFor(() =>
@@ -372,9 +423,15 @@ describe('PacksScreen', () => {
     });
 
     it('keeps an accessible label and exposes busy state while updating', async () => {
+      const installedPack = createPack({ id: 'proj_kariega' });
       useWildlifeStore.setState({
-        packs: [createPack()],
+        packs: [installedPack],
         miewidModel: readyModel,
+      });
+      mockCheckLatestPackStatus.mockResolvedValue({
+        ok: true,
+        isLatest: false,
+        latestVersion: '2026-09-05T11:06:39Z',
       });
       let finishUpdate: ((value: { ok: true; pack: EmbeddingPack }) => void) | undefined;
       mockAcquireLatestPack.mockReturnValue(
@@ -382,8 +439,14 @@ describe('PacksScreen', () => {
           finishUpdate = resolve;
         }),
       );
+      let focusCallback: (() => void) | undefined;
+      mockUseFocusEffect.mockImplementation(callback => {
+        focusCallback = callback;
+      });
 
-      const { getByTestId } = render(<PacksScreen />);
+      const { getByTestId, getByText } = render(<PacksScreen />);
+      act(() => focusCallback?.());
+      await waitFor(() => expect(getByText('Update available')).toBeTruthy());
       fireEvent.press(getByTestId('update-pack-button'));
 
       await waitFor(() => {

@@ -9,7 +9,10 @@ import type {
   EmbeddingPack,
   MiewIDModelRecord,
 } from '../../types';
-import type { PackAcquisitionOutcome } from './types';
+import type {
+  PackAcquisitionOutcome,
+  PackUpdateCheckOutcome,
+} from './types';
 import {
   normalizedSha256,
   preparePackCandidate,
@@ -83,6 +86,40 @@ const modelSupportsPack = (
   model?.status === 'ready' &&
   checkEmbeddingModelCompatibility(model.version, packModelVersion) ===
     'compatible';
+
+export async function checkLatestPackStatus(
+  projectId: string,
+  installedPack?: EmbeddingPack,
+): Promise<PackUpdateCheckOutcome> {
+  try {
+    const resolved = await ganeshaApiClient.getLatestPack(projectId);
+    if (!resolved.ok) {
+      return resolved;
+    }
+    const latestSha256 = normalizedSha256(resolved.data.sha256);
+    if (!latestSha256) {
+      return {
+        ok: false,
+        code: 'metadata-invalid',
+        message: 'Latest pack metadata contains an invalid SHA-256',
+      };
+    }
+    return {
+      ok: true,
+      isLatest:
+        installedPack?.status === 'ready' &&
+        installedPack.packVersion === resolved.data.version &&
+        installedPack.artifactSha256?.toLowerCase() === latestSha256,
+      latestVersion: resolved.data.version,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      code: 'unexpected-error',
+      message: errorMessage(error),
+    };
+  }
+}
 
 interface CurrentPackContext {
   installedPack: EmbeddingPack | undefined;
@@ -247,4 +284,8 @@ export async function acquireLatestPack(
   }
 }
 
-export type { PackAcquisitionOutcome, PackAcquisitionErrorCode } from './types';
+export type {
+  PackAcquisitionOutcome,
+  PackAcquisitionErrorCode,
+  PackUpdateCheckOutcome,
+} from './types';

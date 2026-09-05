@@ -221,6 +221,8 @@ as a separate artifact so multiple project packs can share it.
 - Matching excludes quarantined or model-incompatible packs.
 - The UI resolves the latest model before downloading the latest pack.
 - Installed devices expose **Update to Latest Pack** on the Packs screen.
+- On screen focus, a metadata-only version and archive-SHA check reports
+  **Up to date** or **Update available** without downloading the pack.
 - Model candidates are downloaded and verified without changing the active
   model. Pack candidates use versioned, SHA-256-suffixed directories and must
   pass full validation plus model-version compatibility. The model and pack
