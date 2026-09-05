@@ -10,7 +10,7 @@
  */
 
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';
 import { useWildlifeStore } from '../../../src/stores/wildlifeStore';
 import type {
@@ -73,7 +73,7 @@ jest.mock('../../../src/services/modelSourceResolver', () => ({
 }));
 
 jest.mock('../../../src/services/miewidModelManager', () => ({
-  acquireMiewidModel: jest.fn(),
+  prepareMiewidModel: jest.fn(),
 }));
 
 jest.mock('../../../src/services/packDownloadService', () => ({
@@ -86,12 +86,12 @@ jest.mock('../../../src/utils/authGate', () => ({
 
 import { PacksScreen } from '../../../src/screens/PacksScreen';
 import { resolveMiewidModelSource } from '../../../src/services/modelSourceResolver';
-import { acquireMiewidModel } from '../../../src/services/miewidModelManager';
+import { prepareMiewidModel } from '../../../src/services/miewidModelManager';
 import { acquireLatestPack } from '../../../src/services/packDownloadService';
 import { ensureSignedIn } from '../../../src/utils/authGate';
 
 const mockResolveMiewidModelSource = resolveMiewidModelSource as jest.Mock;
-const mockAcquireMiewidModel = acquireMiewidModel as jest.Mock;
+const mockPrepareMiewidModel = prepareMiewidModel as jest.Mock;
 const mockAcquireLatestPack = acquireLatestPack as jest.Mock;
 const mockEnsureSignedIn = ensureSignedIn as jest.Mock;
 
@@ -330,16 +330,105 @@ describe('PacksScreen', () => {
   });
 
   // ==========================================================================
-  // Download button (empty state)
+  // Download and update actions
   // ==========================================================================
   describe('download button', () => {
-    it('renders the download button only in the empty state', () => {
-      const { getByTestId, queryByTestId, rerender } = render(<PacksScreen />);
+    it('shows download when empty and update when a pack is installed', async () => {
+      const { getByTestId, queryByTestId } = render(<PacksScreen />);
       expect(getByTestId('download-pack-button')).toBeTruthy();
+      expect(queryByTestId('update-pack-button')).toBeNull();
 
-      useWildlifeStore.setState({ packs: [createPack()] });
-      rerender(<PacksScreen />);
+      await act(async () => {
+        useWildlifeStore.setState({ packs: [createPack()] });
+      });
       expect(queryByTestId('download-pack-button')).toBeNull();
+      expect(getByTestId('update-pack-button')).toBeTruthy();
+    });
+
+    it('updates an installed pack through the latest-pack acquisition flow', async () => {
+      useWildlifeStore.setState({
+        packs: [createPack()],
+        miewidModel: readyModel,
+      });
+      mockAcquireLatestPack.mockResolvedValue({
+        ok: true,
+        pack: createPack({
+          packVersion: '2026-09-05T11:06:39Z',
+          individualCount: 66,
+        }),
+      });
+
+      const { getByTestId } = render(<PacksScreen />);
+      fireEvent.press(getByTestId('update-pack-button'));
+
+      await waitFor(() =>
+        expect(mockAcquireLatestPack).toHaveBeenCalledWith(
+          'proj_kariega',
+          {},
+          readyModel,
+        ),
+      );
+      expect(mockPrepareMiewidModel).not.toHaveBeenCalled();
+    });
+
+    it('keeps an accessible label and exposes busy state while updating', async () => {
+      useWildlifeStore.setState({
+        packs: [createPack()],
+        miewidModel: readyModel,
+      });
+      let finishUpdate: ((value: { ok: true; pack: EmbeddingPack }) => void) | undefined;
+      mockAcquireLatestPack.mockReturnValue(
+        new Promise(resolve => {
+          finishUpdate = resolve;
+        }),
+      );
+
+      const { getByTestId } = render(<PacksScreen />);
+      fireEvent.press(getByTestId('update-pack-button'));
+
+      await waitFor(() => {
+        const button = getByTestId('update-pack-button');
+        expect(button.props.accessibilityRole).toBe('button');
+        expect(button.props.accessibilityLabel).toBe('Update to Latest Pack');
+        expect(button.props.accessibilityState).toEqual({
+          busy: true,
+          disabled: true,
+        });
+      });
+
+      await act(async () => {
+        finishUpdate?.({ ok: true, pack: createPack() });
+      });
+    });
+
+    it('starts only one update when the action is pressed twice rapidly', async () => {
+      let finishSignIn: ((value: boolean) => void) | undefined;
+      mockEnsureSignedIn.mockReturnValue(
+        new Promise(resolve => {
+          finishSignIn = resolve;
+        }),
+      );
+
+      const { getByTestId } = render(<PacksScreen />);
+      fireEvent.press(getByTestId('download-pack-button'));
+      fireEvent.press(getByTestId('download-pack-button'));
+
+      expect(mockEnsureSignedIn).toHaveBeenCalledTimes(1);
+      await act(async () => finishSignIn?.(false));
+    });
+
+    it('contains a rejected sign-in check and allows a later retry', async () => {
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+      mockEnsureSignedIn
+        .mockRejectedValueOnce(new Error('auth storage unavailable'))
+        .mockResolvedValueOnce(false);
+
+      const { getByTestId } = render(<PacksScreen />);
+      fireEvent.press(getByTestId('download-pack-button'));
+      await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+
+      fireEvent.press(getByTestId('download-pack-button'));
+      await waitFor(() => expect(mockEnsureSignedIn).toHaveBeenCalledTimes(2));
     });
 
     it('does not start the download when not signed in', async () => {
@@ -361,24 +450,32 @@ describe('PacksScreen', () => {
       fireEvent.press(getByTestId('download-pack-button'));
 
       await waitFor(() =>
-        expect(mockAcquireLatestPack).toHaveBeenCalledWith('proj_kariega'),
+        expect(mockAcquireLatestPack).toHaveBeenCalledWith(
+          'proj_kariega',
+          {},
+          readyModel,
+        ),
       );
       expect(mockResolveMiewidModelSource).toHaveBeenCalled();
-      expect(mockAcquireMiewidModel).not.toHaveBeenCalled();
+      expect(mockPrepareMiewidModel).not.toHaveBeenCalled();
     });
 
     it('acquires the model first when it is not yet installed, then the pack', async () => {
-      mockAcquireMiewidModel.mockResolvedValue(readyModel);
+      mockPrepareMiewidModel.mockResolvedValue(readyModel);
       mockAcquireLatestPack.mockResolvedValue({ ok: true, pack: createPack() });
 
       const { getByTestId } = render(<PacksScreen />);
       fireEvent.press(getByTestId('download-pack-button'));
 
       await waitFor(() =>
-        expect(mockAcquireLatestPack).toHaveBeenCalledWith('proj_kariega'),
+        expect(mockAcquireLatestPack).toHaveBeenCalledWith(
+          'proj_kariega',
+          {},
+          readyModel,
+        ),
       );
       expect(mockResolveMiewidModelSource).toHaveBeenCalled();
-      expect(mockAcquireMiewidModel).toHaveBeenCalled();
+      expect(mockPrepareMiewidModel).toHaveBeenCalled();
     });
 
     it('replaces a ready model when the latest artifact identity changed', async () => {
@@ -389,16 +486,20 @@ describe('PacksScreen', () => {
           sha256: 'old-hash',
         },
       });
-      mockAcquireMiewidModel.mockResolvedValue(readyModel);
+      mockPrepareMiewidModel.mockResolvedValue(readyModel);
       mockAcquireLatestPack.mockResolvedValue({ ok: true, pack: createPack() });
 
       const { getByTestId } = render(<PacksScreen />);
       fireEvent.press(getByTestId('download-pack-button'));
 
       await waitFor(() =>
-        expect(mockAcquireLatestPack).toHaveBeenCalledWith('proj_kariega'),
+        expect(mockAcquireLatestPack).toHaveBeenCalledWith(
+          'proj_kariega',
+          {},
+          readyModel,
+        ),
       );
-      expect(mockAcquireMiewidModel).toHaveBeenCalledWith(latestModelSource);
+      expect(mockPrepareMiewidModel).toHaveBeenCalledWith(latestModelSource);
     });
 
     it('alerts and stops when resolving the model source fails', async () => {
@@ -413,13 +514,13 @@ describe('PacksScreen', () => {
       fireEvent.press(getByTestId('download-pack-button'));
 
       await waitFor(() => expect(alertSpy).toHaveBeenCalled());
-      expect(mockAcquireMiewidModel).not.toHaveBeenCalled();
+      expect(mockPrepareMiewidModel).not.toHaveBeenCalled();
       expect(mockAcquireLatestPack).not.toHaveBeenCalled();
     });
 
     it('alerts and stops when the model download does not end in ready status', async () => {
       const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-      mockAcquireMiewidModel.mockResolvedValue({
+      mockPrepareMiewidModel.mockResolvedValue({
         ...readyModel,
         status: 'corrupt',
       });

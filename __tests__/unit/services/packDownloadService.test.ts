@@ -1,6 +1,12 @@
 import { acquireLatestPack } from '../../../src/services/packDownloadService';
 import { useWildlifeStore } from '../../../src/stores/wildlifeStore';
-import type { EmbeddingPackManifest, PackIndividual } from '../../../src/types';
+import type {
+  EmbeddingPack,
+  EmbeddingPackManifest,
+  MiewIDModelRecord,
+  PackIndividual,
+} from '../../../src/types';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 jest.mock('react-native-fs', () => ({
   DocumentDirectoryPath: '/mock/documents',
@@ -48,18 +54,36 @@ const mockGetLatestPack = ganeshaApiClient.getLatestPack as jest.Mock;
 const mockDownload = downloadFileWithIntegrityCheck as jest.Mock;
 const mockInstallPack = packManager.installPack as jest.Mock;
 const mockResolvePackFile = resolvePackFile as jest.Mock;
+const mockStorageSetItem = AsyncStorage.setItem as jest.Mock;
 
 const PROJECT_ID = 'proj_kariega';
-const EXTRACT_DIR = '/mock/documents/embedding_packs/proj_kariega';
+const PACK_SHA =
+  'ebed1d341b58034de6108a5b138373aa64a7e8458bc43e43909ad0850bf660ba';
+const OTHER_PACK_SHA =
+  'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const encodePathIdentity = (value: string): string => {
+  let encoded = '';
+  for (let index = 0; index < value.length; index += 1) {
+    encoded += value.charCodeAt(index).toString(16).padStart(4, '0');
+  }
+  return encoded;
+};
+const PROJECT_PATH = `p-${encodePathIdentity(PROJECT_ID)}`;
+const RELEASE_PATH = `v-${encodePathIdentity(
+  '2026-08-22T12:38:40Z',
+)}-${PACK_SHA}`;
+const EXTRACT_DIR =
+  `/mock/documents/embedding_packs/${PROJECT_PATH}/${RELEASE_PATH}`;
+const OLD_EXTRACT_DIR =
+  '/mock/documents/embedding_packs/proj_kariega-2026-08-01T00_00_00Z';
 const ZIP_FINAL_PATH = expect.stringContaining(
-  '/mock/documents/pack_downloads/proj_kariega-',
+  `/mock/documents/pack_downloads/${PROJECT_PATH}/`,
 );
-
 const makePackInfo = (overrides: Partial<Record<string, unknown>> = {}) => ({
   projectId: PROJECT_ID,
   displayName: 'Kariega Elephants',
   version: '2026-08-22T12:38:40Z',
-  sha256: 'ebed1d341b58034de6108a5b138373aa64a7e8458bc43e43909ad0850bf660ba',
+  sha256: PACK_SHA,
   sizeBytes: 20_684_583,
   individualCount: 3,
   embeddingCount: 141,
@@ -95,14 +119,55 @@ const makeManifest = (
 
 const makeIndividuals = (): PackIndividual[] => [];
 
+const makeReadyModel = (
+  overrides: Partial<MiewIDModelRecord> = {},
+): MiewIDModelRecord => ({
+  path: '/mock/documents/models/miewid-4.1.0.onnx',
+  name: 'miewid',
+  version: '4.1.0',
+  sha256: 'abc123',
+  sizeBytes: 204_011_297,
+  status: 'ready',
+  verifiedAt: '2026-08-01T00:00:00.000Z',
+  ...overrides,
+});
+
+const makeInstalledPack = (
+  overrides: Partial<EmbeddingPack> = {},
+): EmbeddingPack => ({
+  id: PROJECT_ID,
+  packVersion: '2026-08-01T00:00:00Z',
+  artifactSha256: 'c'.repeat(64),
+  species: 'Loxodonta africana',
+  featureClass: 'elephant+ear',
+  displayName: 'Kariega Elephants',
+  wildbookInstanceUrl: 'https://kariega.wildbook.org',
+  exportDate: '2026-08-01T00:00:00Z',
+  individualCount: 60,
+  embeddingDim: 2152,
+  embeddingModelVersion: '4.1.0',
+  detectorModelFile: `${OLD_EXTRACT_DIR}/models/elephant-yolo11n.onnx`,
+  embeddingsFile: `${OLD_EXTRACT_DIR}/embeddings/embeddings.bin`,
+  indexFile: `${OLD_EXTRACT_DIR}/embeddings/index.json`,
+  referencePhotosDir: `${OLD_EXTRACT_DIR}/reference_photos`,
+  packDir: OLD_EXTRACT_DIR,
+  downloadedAt: '2026-08-01T00:00:00Z',
+  sizeBytes: 20_000_000,
+  status: 'ready',
+  validatedAt: '2026-08-01T00:00:00Z',
+  ...overrides,
+});
+
 describe('acquireLatestPack', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     useWildlifeStore.getState().reset();
+    useWildlifeStore.setState({ miewidModel: makeReadyModel() });
     // Files "exist" by default (staging/extract-dir cleanup calls unlink
     // only when RNFS.exists is true) — the one test exercising "nothing to
     // clean up yet" overrides this per-path.
     mockExists.mockResolvedValue(true);
+    mockUnlink.mockResolvedValue(undefined);
     mockDownload.mockResolvedValue({
       ok: true,
       path: '/mock/documents/pack_downloads/proj_kariega-2026-08-22T12_38_40Z.zip',
@@ -119,6 +184,10 @@ describe('acquireLatestPack', () => {
     mockResolvePackFile.mockImplementation((packDir: string, name: string) =>
       Promise.resolve(`${packDir}/resolved/${name}`),
     );
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it('resolves, downloads, unzips, validates, installs, and registers the pack', async () => {
@@ -182,12 +251,75 @@ describe('acquireLatestPack', () => {
     );
   });
 
-  it('replaces a previously installed pack for the same project', async () => {
+  it('activates a validated update and retains the previous directory for rollback', async () => {
+    useWildlifeStore.setState({ packs: [makeInstalledPack()] });
     mockGetLatestPack.mockResolvedValue({ ok: true, data: makePackInfo() });
-    await acquireLatestPack(PROJECT_ID);
-    await acquireLatestPack(PROJECT_ID);
 
+    const result = await acquireLatestPack(PROJECT_ID);
+
+    expect(result.ok).toBe(true);
     expect(useWildlifeStore.getState().packs).toHaveLength(1);
+    expect(useWildlifeStore.getState().packs[0]).toMatchObject({
+      packVersion: '2026-08-22T12:38:40Z',
+      packDir: EXTRACT_DIR,
+    });
+    expect(mockUnlink).not.toHaveBeenCalledWith(OLD_EXTRACT_DIR);
+  });
+
+  it('returns the installed ready pack when the latest version is unchanged', async () => {
+    const installed = makeInstalledPack({
+      packVersion: '2026-08-22T12:38:40Z',
+      artifactSha256: PACK_SHA,
+      packDir: EXTRACT_DIR,
+    });
+    useWildlifeStore.setState({ packs: [installed] });
+    mockGetLatestPack.mockResolvedValue({ ok: true, data: makePackInfo() });
+
+    const result = await acquireLatestPack(PROJECT_ID);
+
+    expect(result).toEqual({ ok: true, pack: installed });
+    expect(mockDownload).not.toHaveBeenCalled();
+    expect(mockUnzip).not.toHaveBeenCalled();
+    expect(mockInstallPack).not.toHaveBeenCalled();
+  });
+
+  it('redownloads when the version is unchanged but the archive hash changed', async () => {
+    const installed = makeInstalledPack({
+      packVersion: '2026-08-22T12:38:40Z',
+      artifactSha256: PACK_SHA,
+      packDir: EXTRACT_DIR,
+    });
+    useWildlifeStore.setState({ packs: [installed] });
+    mockGetLatestPack.mockResolvedValue({
+      ok: true,
+      data: makePackInfo({ sha256: OTHER_PACK_SHA }),
+    });
+
+    const result = await acquireLatestPack(PROJECT_ID);
+
+    expect(result.ok).toBe(true);
+    expect(mockDownload).toHaveBeenCalled();
+    expect(useWildlifeStore.getState().packs[0].artifactSha256).toBe(
+      OTHER_PACK_SHA,
+    );
+  });
+
+  it('normalizes pack SHA metadata for verification and installed identity', async () => {
+    mockGetLatestPack.mockResolvedValue({
+      ok: true,
+      data: makePackInfo({ sha256: ` ${PACK_SHA.toUpperCase()} ` }),
+    });
+
+    const result = await acquireLatestPack(PROJECT_ID);
+
+    expect(result.ok).toBe(true);
+    expect(mockDownload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: expect.objectContaining({ expectedSha256: PACK_SHA }),
+      }),
+      {},
+    );
+    expect(useWildlifeStore.getState().packs[0].artifactSha256).toBe(PACK_SHA);
   });
 
   it('clears a stale extract directory before unzipping', async () => {
@@ -273,6 +405,152 @@ describe('acquireLatestPack', () => {
       message: 'file-missing: embeddings.bin',
     });
     expect(useWildlifeStore.getState().packs).toHaveLength(0);
+  });
+
+  it('keeps the installed pack active when replacement validation fails', async () => {
+    const installed = makeInstalledPack();
+    useWildlifeStore.setState({ packs: [installed] });
+    mockGetLatestPack.mockResolvedValue({ ok: true, data: makePackInfo() });
+    mockInstallPack.mockResolvedValue({
+      ok: false,
+      errors: [{ code: 'checksum-mismatch', detail: 'embeddings.bin' }],
+    });
+
+    const result = await acquireLatestPack(PROJECT_ID);
+
+    expect(result).toEqual({
+      ok: false,
+      code: 'validation-failed',
+      message: 'checksum-mismatch: embeddings.bin',
+    });
+    expect(useWildlifeStore.getState().packs).toEqual([installed]);
+    expect(mockUnlink).not.toHaveBeenCalledWith(OLD_EXTRACT_DIR);
+    expect(mockUnlink).toHaveBeenCalledWith(EXTRACT_DIR);
+  });
+
+  it('rejects a pack incompatible with the candidate model and preserves active artifacts', async () => {
+    const installed = makeInstalledPack();
+    const activeModel = makeReadyModel();
+    const incompatibleCandidate = makeReadyModel({ version: '4.2.0' });
+    useWildlifeStore.setState({ packs: [installed], miewidModel: activeModel });
+    mockGetLatestPack.mockResolvedValue({ ok: true, data: makePackInfo() });
+
+    const result = await acquireLatestPack(
+      PROJECT_ID,
+      {},
+      incompatibleCandidate,
+    );
+
+    expect(result).toMatchObject({ ok: false, code: 'model-incompatible' });
+    expect(useWildlifeStore.getState().packs).toEqual([installed]);
+    expect(useWildlifeStore.getState().miewidModel).toEqual(activeModel);
+    expect(mockUnlink).toHaveBeenCalledWith(EXTRACT_DIR);
+  });
+
+  it('uses distinct directories when release labels sanitize to the same text', async () => {
+    mockGetLatestPack
+      .mockResolvedValueOnce({
+        ok: true,
+        data: makePackInfo({ version: 'release/a', sha256: PACK_SHA }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: makePackInfo({ version: 'release:a', sha256: PACK_SHA }),
+      });
+
+    await acquireLatestPack(PROJECT_ID);
+    await acquireLatestPack(PROJECT_ID);
+
+    const extractPaths = mockUnzip.mock.calls.map((call) => call[1]);
+    expect(extractPaths).toHaveLength(2);
+    expect(extractPaths[0]).not.toBe(extractPaths[1]);
+    expect(extractPaths[0]).toContain(PACK_SHA);
+    expect(extractPaths[1]).toContain(PACK_SHA);
+  });
+
+  it('aborts when a stale candidate directory cannot be removed', async () => {
+    mockGetLatestPack.mockResolvedValue({ ok: true, data: makePackInfo() });
+    mockUnlink.mockImplementation((path: string) =>
+      path === EXTRACT_DIR
+        ? Promise.reject(new Error('directory locked'))
+        : Promise.resolve(),
+    );
+
+    const result = await acquireLatestPack(PROJECT_ID);
+
+    expect(result).toMatchObject({ ok: false, code: 'filesystem-error' });
+    expect(mockUnzip).not.toHaveBeenCalled();
+    expect(mockInstallPack).not.toHaveBeenCalled();
+  });
+
+  it('returns a structured failure when an unexpected dependency throws', async () => {
+    mockGetLatestPack.mockRejectedValue(new Error('unexpected API failure'));
+
+    const result = await acquireLatestPack(PROJECT_ID);
+
+    expect(result).toEqual({
+      ok: false,
+      code: 'unexpected-error',
+      message: 'unexpected API failure',
+    });
+  });
+
+  it('removes the extracted candidate when validation throws', async () => {
+    mockGetLatestPack.mockResolvedValue({ ok: true, data: makePackInfo() });
+    mockInstallPack.mockRejectedValue(new Error('validator crashed'));
+
+    const result = await acquireLatestPack(PROJECT_ID);
+
+    expect(result).toEqual({
+      ok: false,
+      code: 'unexpected-error',
+      message: 'validator crashed',
+    });
+    expect(mockUnlink).toHaveBeenCalledWith(EXTRACT_DIR);
+  });
+
+  it('removes the candidate when pack-record construction throws', async () => {
+    mockGetLatestPack.mockResolvedValue({ ok: true, data: makePackInfo() });
+    mockResolvePackFile.mockRejectedValue(new Error('path resolution failed'));
+
+    const result = await acquireLatestPack(PROJECT_ID);
+
+    expect(result).toEqual({
+      ok: false,
+      code: 'unexpected-error',
+      message: 'path resolution failed',
+    });
+    expect(mockUnlink).toHaveBeenCalledWith(EXTRACT_DIR);
+  });
+
+  it('restores active artifacts when durable activation fails', async () => {
+    const installed = makeInstalledPack();
+    const activeModel = makeReadyModel();
+    const candidateModel = makeReadyModel({
+      path: '/mock/documents/models/miewid-4.1.0-replacement.onnx',
+      sha256: 'replacement-hash',
+    });
+    await Promise.resolve(
+      useWildlifeStore.setState({
+        packs: [installed],
+        miewidModel: activeModel,
+      }),
+    );
+    mockGetLatestPack.mockResolvedValue({ ok: true, data: makePackInfo() });
+    mockStorageSetItem.mockImplementationOnce(() =>
+      Promise.reject(new Error('storage full')),
+    );
+
+    const result = await acquireLatestPack(PROJECT_ID, {}, candidateModel);
+
+    expect(result).toMatchObject({ ok: false, code: 'activation-failed' });
+    expect(useWildlifeStore.getState().packs).toEqual([installed]);
+    expect(useWildlifeStore.getState().miewidModel).toEqual(activeModel);
+    const persisted = JSON.parse(
+      (await AsyncStorage.getItem('wildlife-store')) ?? '{}',
+    );
+    expect(persisted.state.packs).toEqual([installed]);
+    expect(persisted.state.miewidModel).toEqual(activeModel);
   });
 
   it('forwards download options (progress/signal) to the file download engine', async () => {

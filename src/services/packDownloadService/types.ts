@@ -6,7 +6,12 @@ export type PackAcquisitionErrorCode =
   | GaneshaApiErrorCode
   | DownloadErrorCode
   | 'unzip-failed'
-  | 'validation-failed';
+  | 'validation-failed'
+  | 'model-incompatible'
+  | 'metadata-invalid'
+  | 'filesystem-error'
+  | 'activation-failed'
+  | 'unexpected-error';
 
 export type PackAcquisitionOutcome =
   | { ok: true; pack: EmbeddingPack }

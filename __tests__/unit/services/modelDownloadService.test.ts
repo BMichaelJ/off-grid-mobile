@@ -24,14 +24,16 @@ const mockMoveFile = RNFS.moveFile as jest.Mock;
 const mockDownloadFile = RNFS.downloadFile as jest.Mock;
 const mockStopDownload = RNFS.stopDownload as jest.Mock;
 
-const STAGING_PATH = '/mock/documents/staging/miewid-4.1.0.onnx.part';
-const FINAL_PATH = '/mock/documents/models/miewid-4.1.0.onnx';
+const MODEL_SHA = 'a'.repeat(64);
+const OTHER_MODEL_SHA = 'b'.repeat(64);
+const STAGING_PATH = `/mock/documents/staging/miewid-4.1.0-${MODEL_SHA}.onnx.part`;
+const FINAL_PATH = `/mock/documents/models/miewid-4.1.0-${MODEL_SHA}.onnx`;
 
 const makeSource = (overrides: Partial<ModelSource> = {}): ModelSource => ({
   name: 'miewid',
   version: '4.1.0',
   url: 'https://example.org/miewid_v4_1_fp16.onnx',
-  expectedSha256: 'abc123',
+  expectedSha256: MODEL_SHA,
   expectedSizeBytes: 1000,
   ...overrides,
 });
@@ -56,12 +58,14 @@ const mockDownloadResults = (
 describe('modelDownloadService.downloadModel', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockExists.mockResolvedValue(false);
-    mockMkdir.mockResolvedValue(undefined);
-    mockUnlink.mockResolvedValue(undefined);
-    mockStat.mockResolvedValue({ size: 1000 });
-    mockHash.mockResolvedValue('abc123');
-    mockMoveFile.mockResolvedValue(undefined);
+    mockExists.mockReset().mockResolvedValue(false);
+    mockMkdir.mockReset().mockResolvedValue(undefined);
+    mockUnlink.mockReset().mockResolvedValue(undefined);
+    mockStat.mockReset().mockResolvedValue({ size: 1000 });
+    mockHash.mockReset().mockResolvedValue(MODEL_SHA);
+    mockMoveFile.mockReset().mockResolvedValue(undefined);
+    mockDownloadFile.mockReset();
+    mockStopDownload.mockReset();
   });
 
   const fastOpts = { maxAttempts: 3, baseBackoffMs: 1 };
@@ -74,7 +78,7 @@ describe('modelDownloadService.downloadModel', () => {
     expect(outcome).toEqual({
       ok: true,
       path: FINAL_PATH,
-      sha256: 'abc123',
+      sha256: MODEL_SHA,
       sizeBytes: 1000,
     });
     expect(mockDownloadFile).toHaveBeenCalledWith(
@@ -88,6 +92,45 @@ describe('modelDownloadService.downloadModel', () => {
     const hashOrder = mockHash.mock.invocationCallOrder[0];
     const moveOrder = mockMoveFile.mock.invocationCallOrder[0];
     expect(hashOrder).toBeLessThan(moveOrder);
+  });
+
+  it('uses distinct paths when the same version has different expected bytes', async () => {
+    mockDownloadResults({ statusCode: 200 }, { statusCode: 200 });
+    mockHash
+      .mockResolvedValueOnce(MODEL_SHA)
+      .mockResolvedValueOnce(OTHER_MODEL_SHA);
+
+    await modelDownloadService.downloadModel(makeSource(), fastOpts);
+    await modelDownloadService.downloadModel(
+      makeSource({ expectedSha256: OTHER_MODEL_SHA }),
+      fastOpts,
+    );
+
+    const destinations = mockMoveFile.mock.calls.map(call => call[1]);
+    expect(destinations).toEqual([
+      `/mock/documents/models/miewid-4.1.0-${MODEL_SHA}.onnx`,
+      `/mock/documents/models/miewid-4.1.0-${OTHER_MODEL_SHA}.onnx`,
+    ]);
+  });
+
+  it('reuses a verified hash-keyed model already on disk', async () => {
+    mockExists.mockResolvedValue(true);
+    mockStat.mockResolvedValue({ size: 1000 });
+    mockHash.mockResolvedValue(MODEL_SHA);
+
+    const outcome = await modelDownloadService.downloadModel(
+      makeSource(),
+      fastOpts,
+    );
+
+    expect(outcome).toEqual({
+      ok: true,
+      path: FINAL_PATH,
+      sha256: MODEL_SHA,
+      sizeBytes: 1000,
+    });
+    expect(mockDownloadFile).not.toHaveBeenCalled();
+    expect(mockMoveFile).not.toHaveBeenCalled();
   });
 
   it('fails without retry on a 404', async () => {
@@ -115,7 +158,7 @@ describe('modelDownloadService.downloadModel', () => {
       { reject: new Error('network down') },
       { reject: new Error('network down') },
     );
-    mockExists.mockResolvedValue(true); // staging file present for cleanup
+    mockExists.mockImplementation(async (path: string) => path === STAGING_PATH);
 
     const outcome = await modelDownloadService.downloadModel(makeSource(), fastOpts);
 
@@ -149,7 +192,7 @@ describe('modelDownloadService.downloadModel', () => {
 
   it('recovers when a checksum mismatch is transient', async () => {
     mockDownloadResults({ statusCode: 200 }, { statusCode: 200 });
-    mockHash.mockResolvedValueOnce('deadbeef').mockResolvedValueOnce('abc123');
+    mockHash.mockResolvedValueOnce('deadbeef').mockResolvedValueOnce(MODEL_SHA);
 
     const outcome = await modelDownloadService.downloadModel(makeSource(), fastOpts);
 
@@ -159,7 +202,7 @@ describe('modelDownloadService.downloadModel', () => {
 
   it('compares checksums case-insensitively', async () => {
     mockDownloadResults({ statusCode: 200 });
-    mockHash.mockResolvedValue('ABC123');
+    mockHash.mockResolvedValue(MODEL_SHA.toUpperCase());
 
     const outcome = await modelDownloadService.downloadModel(makeSource(), fastOpts);
 
@@ -183,6 +226,8 @@ describe('modelDownloadService.downloadModel', () => {
       ...fastOpts,
       signal: controller.signal,
     });
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
+    expect(mockDownloadFile).toHaveBeenCalledTimes(1);
     controller.abort();
     const outcome = await pending;
 

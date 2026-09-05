@@ -220,48 +220,47 @@ as a separate artifact so multiple project packs can share it.
 - Startup reconciliation can quarantine invalid packs.
 - Matching excludes quarantined or model-incompatible packs.
 - The UI resolves the latest model before downloading the latest pack.
+- Installed devices expose **Update to Latest Pack** on the Packs screen.
+- Model candidates are downloaded and verified without changing the active
+  model. Pack candidates use versioned, SHA-256-suffixed directories and must
+  pass full validation plus model-version compatibility. The model and pack
+  records are then persisted together; a failed replacement restores the prior
+  active records.
+- Model cache filenames also include the expected SHA-256, so changed bytes
+  cannot overwrite an active model even when a publisher reuses a version name.
 
 ### Current Limitations
 
-- The download service is user initiated, but the **Download Latest Pack**
-  control is only rendered when no pack is installed. Once `packs.length > 0`,
-  the current Packs and Pack Details screens expose no update or re-download
-  action.
 - There is no background or reconnect-triggered pack check.
 - Model and pack are resolved through separate latest-version calls; there is
   no single release descriptor binding an approved pair.
-- The project pack is extracted into one stable directory. The previous
-  directory is removed before the replacement finishes validation.
-- Consequently, the current flow does not provide true last-known-good rollback
-  if replacement fails after removal.
-- Model acquisition also replaces the persisted good model record with a
-  `downloading` record before success; failure leaves that record `missing` or
-  `corrupt` rather than restoring the previous record.
+- Previous pack directories are retained, but there is no user-facing manual
+  rollback action or retention limit for older versions.
+- Standalone model acquisition can still publish a `downloading` state; the
+  Packs-screen update transaction avoids that API and stages its candidate.
 - `packManager` has a deletion method, but the current pack screens expose no
   delete or rollback action.
 - The validator checks that the detector config file exists but does not validate
   its schema. An unreadable or malformed config silently falls back to a generic
   YOLOv5 configuration.
 
-### Recommended Target Improvement
+### Current Pack Activation
 
-Keep the current validation rules, but install each pack into an immutable
-versioned directory and activate it through a small local pointer only after all
-checks pass:
+Each pack is installed into a distinct versioned directory. The persisted
+Wildlife store record is replaced only after the candidate passes all checks:
 
 ```text
 embedding_packs/
-|-- <project-id>/
-|   |-- <pack-version-a>/
-|   |-- <pack-version-b>/
-|   `-- active.json
-`-- staging/
+|-- <project-id>-<pack-version-a>/
+`-- <project-id>-<pack-version-b>/
 ```
 
-`active.json` should be replaced atomically. The app can then retain one
-last-known-good version and roll back without downloading again. A future model
-change should use one release descriptor containing the model version/hash and
-the compatible pack version/hash.
+If download, extraction, or validation fails, the active store record and its
+directory are untouched. After a successful activation the prior directory is
+retained for recovery. A future improvement should cap retained versions and
+provide a deliberate rollback action. A future model change should use one
+release descriptor containing the model version/hash and compatible pack
+version/hash.
 
 The current implementation is in
 [`PacksScreen`](../src/screens/PacksScreen.tsx),
@@ -381,7 +380,7 @@ offline profile snapshot needed to identify and review candidates.
 | Ambiguous candidates | Preserve ranked evidence for human review | Implemented |
 | App/process termination | Retain field data and return interrupted uploads to a retryable state | Partial: data persists, but `uploading` is not recovered on startup |
 | Partial multi-detection upload | Persist completed detection IDs and retry the remainder without remote duplicates | Partial: local IDs skip persisted successes, but the accept-before-persist crash window remains |
-| Replacement pack fails after old removal | Restore last-known-good pack | Not implemented |
+| Replacement pack fails validation | Keep the active last-known-good pack | Implemented; physical interruption and low-storage tests pending |
 | Connectivity returns | Offer or trigger policy-controlled sync | Manual only |
 | Provisional individual needs central review | Export/sync without inventing an authoritative ID | Not implemented |
 
@@ -468,7 +467,8 @@ application-code change.
 Not for the first controlled field test: install and verify an approved pack on
 every device before departure. It is valuable later to check for staleness and
 download in the background, but activation must remain validation-gated. The
-current UI only exposes **Download Latest Pack** when no pack is installed.
+current UI exposes **Download Latest Pack** when empty and **Update to Latest
+Pack** when a pack is installed.
 
 #### 10. Does Off Grid Mobile already provide sufficient synchronization?
 
@@ -481,10 +481,11 @@ encounter fields, or synchronize with an upstream research catalog.
 
 The app requests latest-version metadata, downloads from the supplied URL into
 staging, verifies expected size and SHA-256, validates the pack structure, and
-checks normalized model-version equality. Current replacement is not atomic:
-the previous pack directory and good model record can be displaced before the
-new pair is fully accepted. Versioned installation plus last-known-good rollback
-is the recommended next improvement.
+checks normalized model-version equality. A candidate model remains inactive
+while the pack is prepared. Pack versions are extracted into separate
+SHA-256-suffixed directories, then model and pack records are persisted together
+only after full validation, so a failed update preserves the working pair. A
+manual pack rollback is not yet exposed in the UI.
 
 ### Researcher Workflow
 
@@ -550,8 +551,8 @@ the phone.
 These are mobile-repository improvements, ordered by dependency rather than a
 product schedule:
 
-1. **Atomic pack activation and rollback:** install immutable versioned packs,
-   atomically switch the active pointer, and retain one last-known-good version.
+1. **Pack retention and manual rollback:** cap retained versioned directories
+  and expose deliberate recovery to the last-known-good pack.
 2. **Bound model-pack releases:** consume one release descriptor when a model
    change requires a coordinated compatible pack.
 3. **Connectivity orchestrator:** centralize network state and trigger a
@@ -591,8 +592,8 @@ The following tests provide direct evidence that the boundaries hold:
    and confirm the sync engine does not submit it as a pack identity.
 6. Deny location permission and confirm capture, identification, review, and
    sync remain valid with nullable GPS.
-7. Replace a working pack with an invalid candidate and verify last-known-good
-   recovery after the recommended atomic-activation change.
+7. Replace a working pack with an invalid candidate and verify the active pack
+  remains usable through failure, process restart, and low-storage conditions.
 8. Run identical images through supported device platforms and compare
    detection, embedding cosine, candidate order, and persistence output.
 

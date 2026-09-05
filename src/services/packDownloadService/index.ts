@@ -1,13 +1,21 @@
 import RNFS from 'react-native-fs';
-import { unzip } from 'react-native-zip-archive';
 import { ganeshaApiClient } from '../ganeshaApiClient';
-import { downloadFileWithIntegrityCheck } from '../fileDownloadService';
 import type { DownloadOptions } from '../fileDownloadService';
-import { packManager } from '../packManager';
 import { resolvePackFile } from '../packManager/validator';
+import { checkEmbeddingModelCompatibility } from '../miewidModelManager';
+import type { LatestPackInfo } from '../ganeshaApiClient/types';
 import { useWildlifeStore } from '../../stores/wildlifeStore';
-import type { EmbeddingPack } from '../../types';
+import type {
+  EmbeddingPack,
+  MiewIDModelRecord,
+} from '../../types';
 import type { PackAcquisitionOutcome } from './types';
+import {
+  normalizedSha256,
+  preparePackCandidate,
+  removeIfExists,
+} from './candidate';
+import type { PreparedPack } from './candidate';
 import logger from '../../utils/logger';
 
 /**
@@ -16,110 +24,116 @@ import logger from '../../utils/logger';
  * same retry/checksum/atomic-move guarantees `modelDownloadService`
  * established (shared via `fileDownloadService`), unzips it, validates +
  * installs it via `packManager`, and registers the result in the wildlife
- * store. One pack per project: re-running this for the same `projectId`
- * replaces the previously installed pack, matching `addPack`'s
- * dedupe-by-id behavior.
+ * store. Each version uses a distinct directory, so the active pack remains
+ * usable until its replacement passes full validation. One pack per project
+ * is active in the store; older version directories remain available for
+ * rollback.
  */
 
-const packDownloadsDir = () => `${RNFS.DocumentDirectoryPath}/pack_downloads`;
-const stagingDir = () => `${RNFS.DocumentDirectoryPath}/staging`;
-
-/** Filesystem-safe: pack versions are free-form (e.g. ISO timestamps with colons). */
-const sanitizeForPath = (value: string): string =>
-  value.replace(/[^a-zA-Z0-9._-]/g, '_');
-
-const zipStagingPathFor = (projectId: string, version: string) =>
-  `${stagingDir()}/pack-${sanitizeForPath(projectId)}-${sanitizeForPath(
-    version,
-  )}.zip.part`;
-const zipFinalPathFor = (projectId: string, version: string) =>
-  `${packDownloadsDir()}/${sanitizeForPath(projectId)}-${sanitizeForPath(
-    version,
-  )}.zip`;
-const extractDirFor = (projectId: string) =>
-  `${packManager.getPacksDir()}/${sanitizeForPath(projectId)}`;
-
-async function removeIfExists(path: string): Promise<void> {
+async function activateArtifacts(
+  pack: EmbeddingPack,
+  model: MiewIDModelRecord,
+): Promise<void> {
+  const previous = useWildlifeStore.getState();
+  const previousPacks = previous.packs;
+  const previousModel = previous.miewidModel;
+  const nextPacks = [...previousPacks.filter(item => item.id !== pack.id), pack];
   try {
-    if (await RNFS.exists(path)) {
-      await RNFS.unlink(path);
-    }
-  } catch (error) {
-    logger.warn(
-      `[PackDownload] Failed to remove ${path}: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
+    await Promise.resolve(
+      useWildlifeStore.setState({
+        packs: nextPacks,
+        miewidModel: model,
+      }),
     );
+  } catch (error) {
+    try {
+      await Promise.resolve(
+        useWildlifeStore.setState({
+          packs: previousPacks,
+          miewidModel: previousModel,
+        }),
+      );
+    } catch (rollbackError) {
+      logger.error(
+        '[PackDownload] Failed to persist activation rollback:',
+        rollbackError,
+      );
+    }
+    throw error;
   }
 }
 
-export async function acquireLatestPack(
+type PackAcquisitionFailure = Extract<
+  PackAcquisitionOutcome,
+  { ok: false }
+>;
+
+const failure = (
+  code: PackAcquisitionFailure['code'],
+  message: string,
+): PackAcquisitionFailure => ({ ok: false, code, message });
+
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
+const modelSupportsPack = (
+  model: MiewIDModelRecord | null | undefined,
+  packModelVersion: string,
+): model is MiewIDModelRecord =>
+  model?.status === 'ready' &&
+  checkEmbeddingModelCompatibility(model.version, packModelVersion) ===
+    'compatible';
+
+interface CurrentPackContext {
+  installedPack: EmbeddingPack | undefined;
+  latestVersion: string;
+  latestSha256: string;
+  activationModel: MiewIDModelRecord | null | undefined;
+  preparedModel: MiewIDModelRecord | undefined;
+}
+
+async function resolveCurrentPack({
+  installedPack,
+  latestVersion,
+  latestSha256,
+  activationModel,
+  preparedModel,
+}: CurrentPackContext,
+): Promise<PackAcquisitionOutcome | null> {
+  if (
+    installedPack?.status !== 'ready' ||
+    installedPack.packVersion !== latestVersion ||
+    installedPack.artifactSha256?.toLowerCase() !== latestSha256 ||
+    !(await RNFS.exists(installedPack.packDir))
+  ) {
+    return null;
+  }
+  if (!modelSupportsPack(activationModel, installedPack.embeddingModelVersion)) {
+    return failure(
+      'model-incompatible',
+      'The ready model is incompatible with the latest pack',
+    );
+  }
+  if (preparedModel && preparedModel !== useWildlifeStore.getState().miewidModel) {
+    try {
+      await activateArtifacts(installedPack, preparedModel);
+    } catch (error) {
+      return failure('activation-failed', errorMessage(error));
+    }
+  }
+  return { ok: true, pack: installedPack };
+}
+
+async function buildPackRecord(
   projectId: string,
-  opts: DownloadOptions = {},
-): Promise<PackAcquisitionOutcome> {
-  const resolved = await ganeshaApiClient.getLatestPack(projectId);
-  if (!resolved.ok) {
-    return resolved;
-  }
-  const info = resolved.data;
-
-  await RNFS.mkdir(packDownloadsDir());
-  const zipStaging = zipStagingPathFor(projectId, info.version);
-  const zipFinal = zipFinalPathFor(projectId, info.version);
-
-  const downloadOutcome = await downloadFileWithIntegrityCheck(
-    {
-      source: {
-        url: info.downloadUrl,
-        expectedSha256: info.sha256,
-        expectedSizeBytes: info.sizeBytes,
-      },
-      stagingPath: zipStaging,
-      finalPath: zipFinal,
-    },
-    opts,
-  );
-  if (!downloadOutcome.ok) {
-    return downloadOutcome;
-  }
-
-  const extractDir = extractDirFor(projectId);
-  try {
-    await packManager.initialize();
-    // A prior install at this path must be fully cleared first -- unzip
-    // does not guarantee it overwrites-in-place cleanly, and a stale file
-    // from an older pack version left behind would silently corrupt the
-    // new one.
-    await removeIfExists(extractDir);
-    await unzip(downloadOutcome.path, extractDir);
-  } catch (error) {
-    await removeIfExists(downloadOutcome.path);
-    return {
-      ok: false,
-      code: 'unzip-failed',
-      message: error instanceof Error ? error.message : String(error),
-    };
-  }
-
-  // The raw zip is no longer needed once extracted -- its contents now live
-  // on disk as the pack directory, and re-downloading is cheap if ever
-  // needed again.
-  await removeIfExists(downloadOutcome.path);
-
-  const validation = await packManager.installPack(extractDir);
-  if (!validation.ok) {
-    await removeIfExists(extractDir);
-    return {
-      ok: false,
-      code: 'validation-failed',
-      message: validation.errors.map(e => `${e.code}: ${e.detail}`).join('; '),
-    };
-  }
-
-  const { manifest } = validation;
-  const pack: EmbeddingPack = {
+  info: LatestPackInfo,
+  prepared: Extract<PreparedPack, { ok: true }>,
+): Promise<EmbeddingPack> {
+  const { extractDir, manifest } = prepared;
+  return {
     id: projectId,
     packVersion: info.version,
+    artifactSha256: prepared.artifactSha256,
     species: manifest.species,
     featureClass: manifest.featureClass,
     displayName: info.displayName ?? manifest.displayName,
@@ -140,16 +154,97 @@ export async function acquireLatestPack(
     referencePhotosDir: `${extractDir}/reference_photos`,
     packDir: extractDir,
     downloadedAt: new Date().toISOString(),
-    sizeBytes: downloadOutcome.sizeBytes,
+    sizeBytes: prepared.sizeBytes,
     status: 'ready',
     validatedAt: new Date().toISOString(),
   };
+}
 
-  useWildlifeStore.getState().addPack(pack);
+async function acquireLatestPackInternal(
+  projectId: string,
+  opts: DownloadOptions = {},
+  preparedModel?: MiewIDModelRecord,
+): Promise<PackAcquisitionOutcome> {
+  const resolved = await ganeshaApiClient.getLatestPack(projectId);
+  if (!resolved.ok) {
+    return resolved;
+  }
+  const info = resolved.data;
+  const packSha256 = normalizedSha256(info.sha256);
+  if (!packSha256) {
+    return failure(
+      'metadata-invalid',
+      'Latest pack metadata contains an invalid SHA-256',
+    );
+  }
+  const activationModel =
+    preparedModel ?? useWildlifeStore.getState().miewidModel;
+  const installedPack = useWildlifeStore
+    .getState()
+    .packs.find(pack => pack.id === projectId);
+  const currentPackResult = await resolveCurrentPack({
+    installedPack,
+    latestVersion: info.version,
+    latestSha256: packSha256,
+    activationModel,
+    preparedModel,
+  });
+  if (currentPackResult) {
+    return currentPackResult;
+  }
+
+  const candidate = await preparePackCandidate({
+    projectId,
+    info,
+    packSha256,
+    downloadOptions: opts,
+  });
+  if (!candidate.ok) {
+    return candidate.failure;
+  }
+
+  if (!modelSupportsPack(activationModel, candidate.manifest.embeddingModel.version)) {
+    await removeIfExists(candidate.extractDir);
+    return failure(
+      'model-incompatible',
+      'The ready model is incompatible with the downloaded pack',
+    );
+  }
+  let pack: EmbeddingPack;
+  try {
+    pack = await buildPackRecord(projectId, info, candidate);
+  } catch (error) {
+    await removeIfExists(candidate.extractDir);
+    return failure('unexpected-error', errorMessage(error));
+  }
+
+  try {
+    await activateArtifacts(pack, activationModel);
+  } catch (error) {
+    await removeIfExists(candidate.extractDir);
+    return failure('activation-failed', errorMessage(error));
+  }
   logger.log(
-    `[PackDownload] Installed pack ${pack.id} (${pack.individualCount} individuals) at ${extractDir}`,
+    `[PackDownload] Installed pack ${pack.id} (${pack.individualCount} individuals) at ${candidate.extractDir}`,
   );
   return { ok: true, pack };
+}
+
+export async function acquireLatestPack(
+  projectId: string,
+  opts: DownloadOptions = {},
+  preparedModel?: MiewIDModelRecord,
+): Promise<PackAcquisitionOutcome> {
+  try {
+    return await acquireLatestPackInternal(projectId, opts, preparedModel);
+  } catch (error) {
+    logger.error('[PackDownload] Unexpected acquisition failure:', error);
+    return {
+      ok: false,
+      code: 'unexpected-error',
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 export type { PackAcquisitionOutcome, PackAcquisitionErrorCode } from './types';

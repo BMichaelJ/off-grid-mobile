@@ -82,6 +82,8 @@ export interface DetectorConfig {
 export interface EmbeddingPack {
   id: string;
   packVersion: string;
+  /** SHA-256 of the installed source archive; absent only on legacy records. */
+  artifactSha256?: string;
   species: string;
   featureClass: string;
   displayName: string;

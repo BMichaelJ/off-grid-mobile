@@ -2,6 +2,7 @@ import {
   reconcileMiewidModel,
   checkEmbeddingModelCompatibility,
   acquireMiewidModel,
+  prepareMiewidModel,
 } from '../../../src/services/miewidModelManager';
 import { useWildlifeStore } from '../../../src/stores/wildlifeStore';
 import type { MiewIDModelRecord } from '../../../src/types';
@@ -240,6 +241,54 @@ describe('acquireMiewidModel', () => {
       SOURCE,
       expect.objectContaining({ onProgress }),
     );
+  });
+});
+
+describe('prepareMiewidModel', () => {
+  const SOURCE = {
+    name: 'miewid',
+    version: '4.2.0',
+    url: 'https://example.org/miewid-4.2.onnx',
+    expectedSha256: 'def456',
+    expectedSizeBytes: 2000,
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    useWildlifeStore.setState({ miewidModel: makeRecord() });
+  });
+
+  it('returns a verified candidate without replacing the active model', async () => {
+    const active = useWildlifeStore.getState().miewidModel;
+    mockDownloadModel.mockResolvedValue({
+      ok: true,
+      path: '/mock/documents/models/miewid-4.2.0.onnx',
+      sha256: 'def456',
+      sizeBytes: 2000,
+    });
+
+    const candidate = await prepareMiewidModel(SOURCE);
+
+    expect(candidate).toMatchObject({
+      version: '4.2.0',
+      status: 'ready',
+      path: '/mock/documents/models/miewid-4.2.0.onnx',
+    });
+    expect(useWildlifeStore.getState().miewidModel).toEqual(active);
+  });
+
+  it('returns a failed candidate without replacing the active model', async () => {
+    const active = useWildlifeStore.getState().miewidModel;
+    mockDownloadModel.mockResolvedValue({
+      ok: false,
+      code: 'checksum-mismatch',
+      message: 'hash differs',
+    });
+
+    const candidate = await prepareMiewidModel(SOURCE);
+
+    expect(candidate.status).toBe('corrupt');
+    expect(useWildlifeStore.getState().miewidModel).toEqual(active);
   });
 });
 

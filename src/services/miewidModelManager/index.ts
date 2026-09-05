@@ -39,6 +39,54 @@ export function checkEmbeddingModelCompatibility(
   return model === pack ? 'compatible' : 'incompatible';
 }
 
+const candidateRecord = (
+  source: ModelSource,
+  overrides: Partial<MiewIDModelRecord> = {},
+): MiewIDModelRecord => ({
+  path: '',
+  name: source.name,
+  version: source.version,
+  sha256: source.expectedSha256 || null,
+  sizeBytes: source.expectedSizeBytes ?? null,
+  status: 'downloading',
+  verifiedAt: null,
+  ...overrides,
+});
+
+/** Download and verify a model candidate without changing the active model. */
+export async function prepareMiewidModel(
+  source: ModelSource,
+  opts: DownloadOptions = {},
+): Promise<MiewIDModelRecord> {
+  let outcome;
+  try {
+    outcome = await modelDownloadService.downloadModel(source, opts);
+  } catch (error) {
+    logger.error('[MiewIDModelManager] Model preparation threw:', error);
+    return candidateRecord(source, { status: 'missing' });
+  }
+
+  if (outcome.ok) {
+    return candidateRecord(source, {
+      path: outcome.path,
+      sha256: outcome.sha256,
+      sizeBytes: outcome.sizeBytes,
+      status: 'ready',
+      verifiedAt: new Date().toISOString(),
+    });
+  }
+  if (outcome.code === 'checksum-mismatch') {
+    logger.error(
+      `[MiewIDModelManager] Downloaded model failed verification: ${outcome.message}`,
+    );
+    return candidateRecord(source, { status: 'corrupt' });
+  }
+  logger.warn(
+    `[MiewIDModelManager] Model preparation failed (${outcome.code}): ${outcome.message}`,
+  );
+  return candidateRecord(source, { status: 'missing' });
+}
+
 /**
  * Download, verify, and register the MiewID model. The store record tracks
  * progress: 'downloading' while in flight, then 'ready' (verified),
@@ -52,37 +100,10 @@ export async function acquireMiewidModel(
 ): Promise<MiewIDModelRecord> {
   const { setMiewidModel } = useWildlifeStore.getState();
 
-  const downloading: MiewIDModelRecord = {
-    path: '',
-    name: source.name,
-    version: source.version,
-    sha256: source.expectedSha256 || null,
-    sizeBytes: source.expectedSizeBytes ?? null,
-    status: 'downloading',
-    verifiedAt: null,
-  };
+  const downloading = candidateRecord(source);
   setMiewidModel(downloading);
 
-  const outcome = await modelDownloadService.downloadModel(source, opts);
-
-  let record: MiewIDModelRecord;
-  if (outcome.ok) {
-    record = {
-      ...downloading,
-      path: outcome.path,
-      sha256: outcome.sha256,
-      sizeBytes: outcome.sizeBytes,
-      status: 'ready',
-      verifiedAt: new Date().toISOString(),
-    };
-  } else if (outcome.code === 'checksum-mismatch') {
-    record = { ...downloading, status: 'corrupt' };
-    logger.error(`[MiewIDModelManager] Downloaded model failed verification: ${outcome.message}`);
-  } else {
-    record = { ...downloading, status: 'missing' };
-    logger.warn(`[MiewIDModelManager] Model acquisition failed (${outcome.code}): ${outcome.message}`);
-  }
-
+  const record = await prepareMiewidModel(source, opts);
   setMiewidModel(record);
   return record;
 }

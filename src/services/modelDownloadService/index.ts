@@ -20,26 +20,83 @@ import logger from '../../utils/logger';
 const stagingDir = () => `${RNFS.DocumentDirectoryPath}/staging`;
 const modelsDir = () => `${RNFS.DocumentDirectoryPath}/models`;
 
-const stagingPathFor = (source: ModelSource) =>
-  `${stagingDir()}/${source.name}-${source.version}.onnx.part`;
-const finalPathFor = (source: ModelSource) =>
-  `${modelsDir()}/${source.name}-${source.version}.onnx`;
+const pathPart = (value: string): string =>
+  value.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/^\.+/, '_').slice(0, 48) ||
+  'model';
+
+const normalizedSha256 = (value: string): string | null => {
+  const normalized = value.trim().toLowerCase();
+  return /^[a-f0-9]{64}$/.test(normalized) ? normalized : null;
+};
+
+const artifactKey = (source: ModelSource, sha256: string): string =>
+  `${pathPart(source.name)}-${pathPart(source.version)}-${sha256}`;
+
+const stagingPathFor = (source: ModelSource, sha256: string) =>
+  `${stagingDir()}/${artifactKey(source, sha256)}.onnx.part`;
+const finalPathFor = (source: ModelSource, sha256: string) =>
+  `${modelsDir()}/${artifactKey(source, sha256)}.onnx`;
+
+async function reuseVerifiedModel(
+  path: string,
+  expectedSha256: string,
+  expectedSizeBytes?: number,
+): Promise<DownloadOutcome | null> {
+  if (!(await RNFS.exists(path))) {
+    return null;
+  }
+  try {
+    const stat = await RNFS.stat(path);
+    const sizeBytes = Number(stat.size);
+    const sizeMatches =
+      expectedSizeBytes === undefined || sizeBytes === expectedSizeBytes;
+    const sha256 = (await RNFS.hash(path, 'sha256')).toLowerCase();
+    if (sizeMatches && sha256 === expectedSha256) {
+      return { ok: true, path, sha256, sizeBytes };
+    }
+    await RNFS.unlink(path);
+  } catch (error) {
+    return {
+      ok: false,
+      code: 'move-failed',
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
+  return null;
+}
 
 class ModelDownloadService {
   async downloadModel(
     source: ModelSource,
     opts: DownloadOptions = {},
   ): Promise<DownloadOutcome> {
+    const expectedSha256 = normalizedSha256(source.expectedSha256);
+    if (!expectedSha256) {
+      return {
+        ok: false,
+        code: 'checksum-mismatch',
+        message: 'Model metadata contains an invalid SHA-256',
+      };
+    }
+    const finalPath = finalPathFor(source, expectedSha256);
+    const cached = await reuseVerifiedModel(
+      finalPath,
+      expectedSha256,
+      source.expectedSizeBytes,
+    );
+    if (cached) {
+      return cached;
+    }
     const outcome = await downloadFileWithIntegrityCheck(
       {
         source: {
           url: source.url,
-          expectedSha256: source.expectedSha256,
+          expectedSha256,
           expectedSizeBytes: source.expectedSizeBytes,
           headers: source.headers,
         },
-        stagingPath: stagingPathFor(source),
-        finalPath: finalPathFor(source),
+        stagingPath: stagingPathFor(source, expectedSha256),
+        finalPath,
       },
       opts,
     );

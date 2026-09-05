@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { View, Text, FlatList, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -14,7 +14,7 @@ import type { EmbeddingPack } from '../types/wildlife';
 import type { RootStackParamList } from '../navigation/types';
 import { GANESHA_PROJECT_ID } from '../config/ganeshaApi';
 import { resolveMiewidModelSource } from '../services/modelSourceResolver';
-import { acquireMiewidModel } from '../services/miewidModelManager';
+import { prepareMiewidModel } from '../services/miewidModelManager';
 import { acquireLatestPack } from '../services/packDownloadService';
 import { ensureSignedIn } from '../utils/authGate';
 import logger from '../utils/logger';
@@ -44,18 +44,23 @@ export const PacksScreen: React.FC = () => {
   const styles = useThemedStyles(createStyles);
   const { packs, miewidModel } = useWildlifeStore();
   const [isDownloading, setIsDownloading] = useState(false);
+  const updateInFlight = useRef(false);
 
   const handlePackPress = (pack: EmbeddingPack) => {
     navigation.navigate('PackDetails', { packId: pack.id });
   };
 
   const handleDownloadPack = useCallback(async () => {
-    if (!(await ensureSignedIn(navigation))) {
+    if (updateInFlight.current) {
       return;
     }
-
+    updateInFlight.current = true;
     setIsDownloading(true);
     try {
+      if (!(await ensureSignedIn(navigation))) {
+        return;
+      }
+
       const resolvedSource = await resolveMiewidModelSource();
       if (!resolvedSource.ok) {
         Alert.alert(
@@ -73,18 +78,23 @@ export const PacksScreen: React.FC = () => {
 
       // Resolve the latest model every time so a ready but outdated model is
       // replaced before installing a pack from a newer embedding space.
+      let modelForPack = miewidModel;
       if (!installedModelIsCurrent) {
-        const record = await acquireMiewidModel(resolvedSource.source);
-        if (record.status !== 'ready') {
+        modelForPack = await prepareMiewidModel(resolvedSource.source);
+        if (modelForPack.status !== 'ready') {
           Alert.alert(
             'Download failed',
-            `The MiewID model could not be installed (status: ${record.status}).`,
+            `The MiewID model could not be prepared (status: ${modelForPack.status}).`,
           );
           return;
         }
       }
 
-      const packResult = await acquireLatestPack(GANESHA_PROJECT_ID);
+      const packResult = await acquireLatestPack(
+        GANESHA_PROJECT_ID,
+        {},
+        modelForPack ?? undefined,
+      );
       if (!packResult.ok) {
         Alert.alert(
           'Download failed',
@@ -93,7 +103,14 @@ export const PacksScreen: React.FC = () => {
         return;
       }
       logger.log(`[PacksScreen] Installed pack ${packResult.pack.id}`);
+    } catch (error) {
+      logger.error('[PacksScreen] Unexpected pack update failure:', error);
+      Alert.alert(
+        'Download failed',
+        'The update could not be completed. Your current pack is still available.',
+      );
     } finally {
+      updateInFlight.current = false;
       setIsDownloading(false);
     }
   }, [miewidModel, navigation]);
@@ -153,6 +170,15 @@ export const PacksScreen: React.FC = () => {
           keyExtractor={item => item.id}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          ListFooterComponent={
+            <Button
+              title="Update to Latest Pack"
+              onPress={handleDownloadPack}
+              loading={isDownloading}
+              style={styles.updateButton}
+              testID="update-pack-button"
+            />
+          }
         />
       )}
     </SafeAreaView>
@@ -179,6 +205,9 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   list: {
     padding: SPACING.lg,
+  },
+  updateButton: {
+    marginTop: SPACING.lg,
   },
   packName: {
     ...TYPOGRAPHY.h2,

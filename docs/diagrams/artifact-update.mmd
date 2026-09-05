@@ -9,29 +9,45 @@ sequenceDiagram
     participant Validate as Pack validator
     participant Store as Wildlife store
 
-    Researcher->>UI: Select Download Latest Pack (empty state only)
+    Researcher->>UI: Select Download Latest Pack or Update to Latest Pack
     UI->>Resolver: Resolve latest model metadata
     Resolver->>API: GET latest model
     API-->>Resolver: Version, size, SHA-256, download URL
-    alt Installed model is not current
-        UI->>Model: Acquire model
-        Model->>Store: Replace current record with downloading state
+    alt Installed model is current
+        UI->>UI: Retain active model candidate
+    else Installed model is not current
+        UI->>Model: Prepare model candidate
         Model->>Download: Download to staging and verify
-        Download-->>Model: Atomically moved verified file
-        Model->>Store: Save ready, missing, or corrupt result
+        alt Model preparation succeeds
+            Download-->>Model: Verified candidate file
+            Model-->>UI: Ready model candidate (not active)
+        else Model preparation fails
+            Download-->>Model: Failure
+            Model-->>UI: Missing or corrupt candidate
+            UI-->>Researcher: Update failed and active artifacts remain unchanged
+        end
     end
-    UI->>Pack: Acquire latest project pack
-    Pack->>API: GET latest pack
-    API-->>Pack: Version, size, SHA-256, counts, download URL
-    Pack->>Download: Download ZIP to staging and verify
-    Pack->>Pack: Remove prior extracted project directory
-    Pack->>Pack: Extract candidate
-    Pack->>Validate: Validate manifest, files, index, and vectors
-    alt Candidate is valid
-        Validate-->>Pack: Valid manifest
-        Pack->>Store: Register ready pack
-    else Candidate is invalid
-        Validate-->>Pack: Validation errors
-        Pack->>Pack: Remove candidate
-        Pack-->>UI: Installation failed
+    opt Ready current or prepared model exists
+        UI->>Pack: Acquire latest project pack with model candidate
+        Pack->>API: GET latest pack
+        API-->>Pack: Version, size, SHA-256, counts, download URL
+        alt Latest ready version is already installed and compatible
+            Pack->>Store: Persist prepared model with current pack if needed
+            Pack-->>UI: Keep current pack
+        else New version is available
+            Pack->>Download: Download ZIP to staging and verify
+            Pack->>Pack: Extract into versioned SHA-256 path
+            Pack->>Validate: Validate manifest, files, index, and vectors
+            alt Candidate is valid and model-compatible
+                Validate-->>Pack: Valid manifest
+                Pack->>Store: Persist model and pack together
+                Note over Pack,Store: Prior records restored if persistence fails
+                Note over Pack,Store: Prior directory retained for recovery
+            else Candidate is invalid or incompatible
+                Validate-->>Pack: Validation errors
+                Pack->>Pack: Remove candidate only
+                Note over Pack,Store: Active artifacts remain unchanged
+                Pack-->>UI: Installation failed
+            end
+        end
     end
