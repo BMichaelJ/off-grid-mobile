@@ -203,8 +203,6 @@ export const MatchReviewScreen: React.FC = () => {
     );
   }
 
-  const confidencePercent = `${Math.round(detection.speciesConfidence * 100)}%`;
-
   return (
     <SafeAreaView
       style={styles.container}
@@ -232,7 +230,6 @@ export const MatchReviewScreen: React.FC = () => {
         />
         <View style={styles.speciesRow}>
           <Text style={styles.speciesText}>{detection.species}</Text>
-          <Text style={styles.confidenceText}>{confidencePercent}</Text>
         </View>
       </View>
 

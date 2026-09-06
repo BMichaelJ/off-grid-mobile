@@ -43,10 +43,6 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     ...TYPOGRAPHY.h3,
     color: colors.text,
   },
-  confidenceText: {
-    ...TYPOGRAPHY.meta,
-    color: colors.textMuted,
-  },
 
   // Candidates list
   candidatesHeader: {
@@ -114,6 +110,11 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     alignItems: 'center' as const,
     gap: SPACING.sm,
     marginTop: SPACING.xs,
+  },
+  confidenceDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   candidateRank: {
     ...TYPOGRAPHY.bodySmall,

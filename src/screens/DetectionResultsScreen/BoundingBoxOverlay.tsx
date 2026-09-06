@@ -42,9 +42,6 @@ export const BoundingBoxOverlay: React.FC<BoundingBoxOverlayProps> = ({
     >
       <View style={[styles.boxLabel, { backgroundColor: borderColor }]}>
         <Text style={styles.boxLabelText}>{species}</Text>
-        <Text style={styles.boxConfidenceText}>
-          {Math.round(speciesConfidence * 100)}%
-        </Text>
       </View>
     </TouchableOpacity>
   );

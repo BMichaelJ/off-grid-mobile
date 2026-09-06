@@ -188,10 +188,10 @@ describe('MatchReviewScreen', () => {
     expect(getByTestId('cropped-detection-image')).toBeTruthy();
   });
 
-  it('shows detection species and confidence', () => {
-    const { getByText } = render(<MatchReviewScreen />);
+  it('shows detection species without a confidence percentage', () => {
+    const { getByText, queryByText } = render(<MatchReviewScreen />);
     expect(getByText('zebra_plains')).toBeTruthy();
-    expect(getByText('95%')).toBeTruthy();
+    expect(queryByText('95%')).toBeNull();
   });
 
   it('shows candidates list', () => {
@@ -205,11 +205,45 @@ describe('MatchReviewScreen', () => {
     expect(getByTestId('candidate-ind-2')).toBeTruthy();
   });
 
-  it('shows candidate rank and a confirmation-required notice instead of a raw score', () => {
-    const { getByText, getAllByText } = render(<MatchReviewScreen />);
-    expect(getByText('Candidate 1')).toBeTruthy();
-    expect(getByText('Candidate 2')).toBeTruthy();
+  it('shows a High confidence band and a confirmation-required notice instead of a raw score', () => {
+    const { getByText, getAllByText, queryByText } = render(<MatchReviewScreen />);
+    expect(getByText('High \u00b7 Candidate 1')).toBeTruthy();
+    expect(getByText('High \u00b7 Candidate 2')).toBeTruthy();
     expect(getAllByText('Researcher confirmation required')).toHaveLength(2);
+    expect(queryByText('92%')).toBeNull();
+    expect(queryByText('85%')).toBeNull();
+  });
+
+  it('shows a Medium confidence band for a candidate scored 0.60-0.79', () => {
+    mockObservations = [
+      makeObservation([
+        makeDetection({
+          matchResult: {
+            topCandidates: [makeCandidate({ individualId: 'ind-1', score: 0.65, source: 'pack' })],
+            approvedIndividual: null,
+            reviewStatus: 'pending' as const,
+          },
+        }),
+      ]),
+    ];
+    const { getByText } = render(<MatchReviewScreen />);
+    expect(getByText('Medium \u00b7 Candidate 1')).toBeTruthy();
+  });
+
+  it('shows a Low confidence band for a candidate scored below 0.60', () => {
+    mockObservations = [
+      makeObservation([
+        makeDetection({
+          matchResult: {
+            topCandidates: [makeCandidate({ individualId: 'ind-1', score: 0.4, source: 'pack' })],
+            approvedIndividual: null,
+            reviewStatus: 'pending' as const,
+          },
+        }),
+      ]),
+    ];
+    const { getByText } = render(<MatchReviewScreen />);
+    expect(getByText('Low \u00b7 Candidate 1')).toBeTruthy();
   });
 
   it('shows source badges on candidates', () => {

@@ -88,8 +88,4 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     ...TYPOGRAPHY.labelSmall,
     color: '#FFFFFF',
   },
-  boxConfidenceText: {
-    ...TYPOGRAPHY.metaSmall,
-    color: '#FFFFFF',
-  },
 });
