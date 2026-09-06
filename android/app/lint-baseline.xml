@@ -350,4 +350,15 @@
             column="26"/>
     </issue>
 
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="        val parsed = Uri.parse(uri)"
+        errorLine2="                     ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/org/ganesha/elebook/embedding/LiteRtEmbeddingModule.kt"
+            line="123"
+            column="22"/>
+    </issue>
+
 </issues>
