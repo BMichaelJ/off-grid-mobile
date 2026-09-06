@@ -326,7 +326,7 @@ describe('ObservationDetailScreen', () => {
 
     const { getByText, queryByTestId } = render(<ObservationDetailScreen />);
     expect(getByText('Received by EleBook')).toBeTruthy();
-    expect(getByText(/1 submission\(s\) received/)).toBeTruthy();
+    expect(getByText(/1 elephant confirmed received/)).toBeTruthy();
     expect(queryByTestId('detail-action-button')).toBeNull();
   });
 

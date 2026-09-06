@@ -167,12 +167,23 @@ describe('getObservationStatusPresentation', () => {
     expect(presentation.status).toBe('received-by-elebook');
     expect(presentation.receiptTime).toBe('2026-08-23T11:00:00Z');
     expect(presentation.submissionCount).toBe(2);
+    expect(presentation.submissionSummary).toBe('2 elephants confirmed received');
   });
 
-  it('reports zero submission count and null receipt time outside received-by-elebook', () => {
+  it('uses singular wording in submissionSummary for exactly one confirmed elephant', () => {
+    const observation = makeObservation({
+      detections: [makeDetection({ id: 'det-1', ganeshaSubmissionId: 'sub-1' })],
+    });
+    const syncItem = makeSyncItem({ status: 'synced', wildbookEncounterIds: ['sub-1'] });
+    const presentation = getObservationStatusPresentation(observation, syncItem);
+    expect(presentation.submissionSummary).toBe('1 elephant confirmed received');
+  });
+
+  it('reports zero submission count and null receipt time/summary outside received-by-elebook', () => {
     const observation = makeObservation();
     const presentation = getObservationStatusPresentation(observation, undefined);
     expect(presentation.submissionCount).toBe(0);
     expect(presentation.receiptTime).toBeNull();
+    expect(presentation.submissionSummary).toBeNull();
   });
 });

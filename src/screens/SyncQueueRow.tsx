@@ -171,7 +171,7 @@ export const SyncQueueRow: React.FC<SyncQueueRowProps> = ({
           </View>
           {presentation.status === 'received-by-elebook' && (
             <Text style={styles.statusMeta} testID={`sync-receipt-${index}`}>
-              {`${presentation.submissionCount} submission(s) received`}
+              {presentation.submissionSummary}
               {presentation.receiptTime ? ` on ${formatTimestamp(presentation.receiptTime)}` : ''}
             </Text>
           )}

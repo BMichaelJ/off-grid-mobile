@@ -92,6 +92,26 @@ export interface ObservationStatusPresentation extends ObservationStatusCopy {
   receiptTime: string | null;
   /** Count of detections with a real Ganesha submission id. */
   submissionCount: number;
+  /**
+   * Ready-to-render, field-plain summary of submissionCount (for example
+   * "2 elephants confirmed received"), only set for 'received-by-elebook'.
+   * Screens render this directly instead of formatting submissionCount
+   * themselves, so the wording -- and its singular/plural grammar -- cannot
+   * drift between Sync and Observation Detail.
+   */
+  submissionSummary: string | null;
+}
+
+/**
+ * One observation (one photo) can contain more than one elephant; each
+ * reviewed-and-approved detection is uploaded and acknowledged individually
+ * (see allSubmissionIds doc comment in syncEngine). Naming the unit
+ * "elephant" here instead of the backend term "submission" is deliberate --
+ * it ties the count back to something a field user already sees on this
+ * card (the detection/elephant count), rather than an unexplained noun.
+ */
+function formatSubmissionSummary(count: number): string {
+  return count === 1 ? '1 elephant confirmed received' : `${count} elephants confirmed received`;
 }
 
 /**
@@ -142,10 +162,12 @@ export function getObservationStatusPresentation(
 ): ObservationStatusPresentation {
   const status = deriveObservationStatus(observation, syncItem);
   const submissionIds = allSubmissionIds(observation);
+  const isReceived = status === 'received-by-elebook';
   return {
     status,
     ...OBSERVATION_STATUS_COPY[status],
-    receiptTime: status === 'received-by-elebook' ? (syncItem?.syncedAt ?? null) : null,
-    submissionCount: status === 'received-by-elebook' ? submissionIds.length : 0,
+    receiptTime: isReceived ? (syncItem?.syncedAt ?? null) : null,
+    submissionCount: isReceived ? submissionIds.length : 0,
+    submissionSummary: isReceived ? formatSubmissionSummary(submissionIds.length) : null,
   };
 }

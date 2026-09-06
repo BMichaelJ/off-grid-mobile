@@ -243,7 +243,7 @@ export const ObservationDetailScreen: React.FC = () => {
           <Text style={styles.statusDescription}>{presentation.description}</Text>
           {presentation.status === 'received-by-elebook' && (
             <Text style={styles.statusMeta} testID="observation-detail-receipt">
-              {`${presentation.submissionCount} submission(s) received`}
+              {presentation.submissionSummary}
               {presentation.receiptTime ? ` on ${formatTimestamp(presentation.receiptTime)}` : ''}
             </Text>
           )}

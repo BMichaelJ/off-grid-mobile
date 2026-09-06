@@ -367,7 +367,7 @@ describe('SyncScreen', () => {
 
     const { getByText, queryByTestId } = render(<SyncScreen />);
     expect(getByText('Received by EleBook')).toBeTruthy();
-    expect(getByText(/1 submission\(s\) received/)).toBeTruthy();
+    expect(getByText(/1 elephant confirmed received/)).toBeTruthy();
     // Informational only -- no action button for an already-received row.
     expect(queryByTestId('sync-action-0')).toBeNull();
   });
