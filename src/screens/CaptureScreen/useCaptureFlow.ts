@@ -146,6 +146,7 @@ export function useCaptureFlow() {
           photoUri,
           speciesConfigs,
           miewidModelPath: miewidModel.path,
+          miewidModelFormat: miewidModel.format,
         });
 
         // Total failure: nothing completed, nothing worth saving.

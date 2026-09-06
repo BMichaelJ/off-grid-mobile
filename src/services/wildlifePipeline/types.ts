@@ -1,4 +1,4 @@
-import type { DetectorConfig, Detection } from '../../types';
+import type { DetectorConfig, Detection, ModelFormat } from '../../types';
 import type { EmbeddingDatabaseEntry } from '../embeddingMatchService/types';
 
 export interface SpeciesConfig {
@@ -23,6 +23,8 @@ export interface ProcessPhotoParams {
   photoUri: string;
   speciesConfigs: SpeciesConfig[];
   miewidModelPath: string;
+  /** Defaults to 'onnx' when omitted -- every model shipped before WS7 was ONNX. */
+  miewidModelFormat?: ModelFormat;
   embeddingInputSize?: [number, number];
   embeddingNormalize?: {
     mean: [number, number, number];

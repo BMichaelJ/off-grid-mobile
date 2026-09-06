@@ -254,6 +254,7 @@ async function executeRun(
       item,
       speciesConfigs,
       miewidModelPath: miewidModel.path,
+      miewidModelFormat: miewidModel.format,
       individualNameIndex,
       matchThreshold,
       writer,

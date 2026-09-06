@@ -1,6 +1,7 @@
 import RNFS from 'react-native-fs';
 import { wildlifePipeline } from '../wildlifePipeline';
 import type { SpeciesConfig } from '../wildlifePipeline/types';
+import type { ModelFormat } from '../../types';
 import { toDisplayUri } from '../../utils/imageUri';
 import logger from '../../utils/logger';
 import { assertEmbeddingDimension } from './embeddingValidation';
@@ -34,6 +35,7 @@ interface ProcessItemArgs {
   item: GoldenBatchManifestItem;
   speciesConfigs: SpeciesConfig[];
   miewidModelPath: string;
+  miewidModelFormat: ModelFormat;
   individualNameIndex: Map<string, string>;
   matchThreshold: number;
   writer: GoldenBatchResultWriter;
@@ -101,6 +103,7 @@ export async function processItem(
     item,
     speciesConfigs,
     miewidModelPath,
+    miewidModelFormat,
     individualNameIndex,
     matchThreshold,
     writer,
@@ -128,6 +131,7 @@ export async function processItem(
       photoUri: toDisplayUri(stagedAbsolutePath),
       speciesConfigs,
       miewidModelPath,
+      miewidModelFormat,
     });
   } catch (error) {
     errors.push({ species: null, stage: 'pipeline', message: errorMessage(error) });
