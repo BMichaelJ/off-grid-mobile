@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -17,6 +17,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import { useThemedStyles, useTheme } from '../../theme';
 import { useWildlifeStore } from '../../stores';
+import { useIndividualNameResolver } from '../../hooks/useIndividualNameResolver';
 import type { RootStackParamList } from '../../navigation/types';
 import { toDisplayUri } from '../../utils/imageUri';
 import { SPACING } from '../../constants';
@@ -32,14 +33,11 @@ type DetectionResultsRouteProp = RouteProp<
   'DetectionResults'
 >;
 
-const getHeaderText = (count: number): string => {
-  if (count === 0) {
+const getHeaderText = (reviewedCount: number, total: number): string => {
+  if (total === 0) {
     return 'No Detections Found';
   }
-  if (count === 1) {
-    return '1 Detection Found';
-  }
-  return `${count} Detections Found`;
+  return `${reviewedCount} of ${total} Reviewed`;
 };
 
 export const DetectionResultsScreen: React.FC = () => {
@@ -57,9 +55,23 @@ export const DetectionResultsScreen: React.FC = () => {
   const updateObservationNotes = useWildlifeStore(
     s => s.updateObservationNotes,
   );
+  const packs = useWildlifeStore(s => s.packs);
+  const localIndividuals = useWildlifeStore(s => s.localIndividuals);
   const [notes, setNotes] = useState(observation?.fieldNotes ?? '');
 
-  const detections = observation?.detections ?? [];
+  const detections = useMemo(
+    () => observation?.detections ?? [],
+    [observation?.detections],
+  );
+  const reviewedCount = detections.filter(
+    d => d.matchResult.reviewStatus === 'approved',
+  ).length;
+  const allCandidates = detections.flatMap(d => d.matchResult.topCandidates);
+  const resolveName = useIndividualNameResolver(
+    allCandidates,
+    packs,
+    localIndividuals,
+  );
 
   const persistNotes = useCallback(async () => {
     await updateObservationNotes(observationId, notes.trim() || null);
@@ -82,6 +94,25 @@ export const DetectionResultsScreen: React.FC = () => {
   );
 
   const handleSaveAll = useCallback(async () => {
+    const unreviewedCount = detections.length - reviewedCount;
+    if (unreviewedCount > 0) {
+      const confirmed = await new Promise<boolean>(resolve => {
+        Alert.alert(
+          'Detections not yet reviewed',
+          `${unreviewedCount} detection${unreviewedCount === 1 ? '' : 's'} ${
+            unreviewedCount === 1 ? 'has' : 'have'
+          } not been reviewed yet. Save anyway?`,
+          [
+            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+            { text: 'Save Anyway', onPress: () => resolve(true) },
+          ],
+        );
+      });
+      if (!confirmed) {
+        return;
+      }
+    }
+
     setIsSaving(true);
     try {
       await persistNotes();
@@ -94,7 +125,7 @@ export const DetectionResultsScreen: React.FC = () => {
     } finally {
       setIsSaving(false);
     }
-  }, [navigation, persistNotes]);
+  }, [navigation, persistNotes, detections, reviewedCount]);
 
   const handleBack = useCallback(() => {
     navigation.goBack();
@@ -115,7 +146,7 @@ export const DetectionResultsScreen: React.FC = () => {
           <Icon name="arrow-left" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
-          {getHeaderText(detections.length)}
+          {getHeaderText(reviewedCount, detections.length)}
         </Text>
         <View style={styles.backButton} />
       </View>
@@ -138,6 +169,7 @@ export const DetectionResultsScreen: React.FC = () => {
               key={detection.id}
               detection={detection}
               onPress={() => handleBoxPress(detection.id)}
+              resolveName={resolveName}
             />
           ))}
         </View>

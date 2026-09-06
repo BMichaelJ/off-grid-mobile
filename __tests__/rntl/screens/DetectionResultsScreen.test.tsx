@@ -98,6 +98,7 @@ const makeObservation = (
 });
 
 let mockObservations = [makeObservation()];
+let mockLocalIndividuals: Array<{ localId: string; userLabel: string | null }> = [];
 const mockUpdateObservationNotes = jest.fn(() => Promise.resolve());
 
 jest.mock('../../../src/stores/wildlifeStore', () => ({
@@ -105,6 +106,8 @@ jest.mock('../../../src/stores/wildlifeStore', () => ({
     const state = {
       observations: mockObservations,
       updateObservationNotes: mockUpdateObservationNotes,
+      packs: [],
+      localIndividuals: mockLocalIndividuals,
     };
     return selector ? selector(state) : state;
   }),
@@ -115,6 +118,18 @@ jest.mock('../../../src/stores/wildlifeStore', () => ({
 // ---------------------------------------------------------------------------
 import { DetectionResultsScreen } from '../../../src/screens/DetectionResultsScreen';
 
+/** Auto-presses "Save Anyway" on the review-confirmation dialog -- the
+ * default for tests that only care whether the save itself happens. Tests
+ * asserting the cancel path or the post-save error alert install their own
+ * spy instead. */
+const autoConfirmSaveAnyway = (
+  _title: unknown,
+  _message?: unknown,
+  buttons?: Array<{ text?: string; onPress?: () => void }>,
+) => {
+  buttons?.find(b => b.text === 'Save Anyway')?.onPress?.();
+};
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -123,6 +138,8 @@ describe('DetectionResultsScreen', () => {
     jest.clearAllMocks();
     mockUpdateObservationNotes.mockResolvedValue(undefined);
     mockObservations = [makeObservation()];
+    mockLocalIndividuals = [];
+    jest.spyOn(Alert, 'alert').mockImplementation(autoConfirmSaveAnyway);
   });
 
   // ==========================================================================
@@ -142,14 +159,14 @@ describe('DetectionResultsScreen', () => {
     mockObservations = [makeObservation(twoDetections)];
 
     const { getByText } = render(<DetectionResultsScreen />);
-    expect(getByText('2 Detections Found')).toBeTruthy();
+    expect(getByText('0 of 2 Reviewed')).toBeTruthy();
   });
 
   it('shows "1 Detection Found" for singular', () => {
     mockObservations = [makeObservation([makeDetection()])];
 
     const { getByText } = render(<DetectionResultsScreen />);
-    expect(getByText('1 Detection Found')).toBeTruthy();
+    expect(getByText('0 of 1 Reviewed')).toBeTruthy();
   });
 
   it('shows "No Detections Found" for empty', () => {
@@ -182,6 +199,36 @@ describe('DetectionResultsScreen', () => {
 
     const { getByText } = render(<DetectionResultsScreen />);
     expect(getByText('zebra_plains')).toBeTruthy();
+  });
+
+  it('shows a tap-to-review hint on an unreviewed bounding box', () => {
+    mockObservations = [makeObservation([makeDetection({ id: 'det-1' })])];
+
+    const { getByTestId, queryByTestId } = render(<DetectionResultsScreen />);
+    expect(getByTestId('box-tap-hint-det-1')).toBeTruthy();
+    expect(queryByTestId('box-reviewed-det-1')).toBeNull();
+  });
+
+  it('shows a reviewed checkmark and the confirmed name on an approved bounding box', () => {
+    mockLocalIndividuals = [{ localId: 'FIELD-001', userLabel: 'Duma' }];
+    mockObservations = [
+      makeObservation([
+        makeDetection({
+          id: 'det-1',
+          species: 'zebra_plains',
+          matchResult: {
+            topCandidates: [],
+            approvedIndividual: 'FIELD-001',
+            reviewStatus: 'approved' as const,
+          },
+        }),
+      ]),
+    ];
+
+    const { getByTestId, getByText, queryByText } = render(<DetectionResultsScreen />);
+    expect(getByTestId('box-reviewed-det-1')).toBeTruthy();
+    expect(getByText('Duma')).toBeTruthy();
+    expect(queryByText('zebra_plains')).toBeNull();
   });
 
   // ==========================================================================
@@ -270,7 +317,7 @@ describe('DetectionResultsScreen', () => {
   });
 
   it('does not navigate back when notes fail to persist', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(autoConfirmSaveAnyway);
     mockUpdateObservationNotes.mockRejectedValueOnce(new Error('disk full'));
     const { getByTestId } = render(<DetectionResultsScreen />);
     fireEvent.press(getByTestId('save-all-button'));
@@ -282,6 +329,63 @@ describe('DetectionResultsScreen', () => {
       );
     });
     expect(mockGoBack).not.toHaveBeenCalled();
+  });
+
+  it('asks for confirmation before saving when a detection has not been reviewed', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(autoConfirmSaveAnyway);
+    mockObservations = [makeObservation([makeDetection({ id: 'det-1' })])];
+    const { getByTestId } = render(<DetectionResultsScreen />);
+
+    fireEvent.press(getByTestId('save-all-button'));
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Detections not yet reviewed',
+        '1 detection has not been reviewed yet. Save anyway?',
+        expect.any(Array),
+      );
+    });
+    expect(mockGoBack).toHaveBeenCalled();
+  });
+
+  it('does not save when the user cancels the unreviewed-detection confirmation', async () => {
+    jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
+      buttons?.find((b: any) => b.text === 'Cancel')?.onPress?.();
+    });
+    mockObservations = [makeObservation([makeDetection({ id: 'det-1' })])];
+    const { getByTestId } = render(<DetectionResultsScreen />);
+
+    fireEvent.press(getByTestId('save-all-button'));
+
+    await waitFor(() => {
+      expect(Alert.alert).toHaveBeenCalled();
+    });
+    expect(mockUpdateObservationNotes).not.toHaveBeenCalled();
+    expect(mockGoBack).not.toHaveBeenCalled();
+  });
+
+  it('saves immediately without a confirmation when every detection is already reviewed', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert');
+    mockObservations = [
+      makeObservation([
+        makeDetection({
+          id: 'det-1',
+          matchResult: {
+            topCandidates: [],
+            approvedIndividual: 'FIELD-001',
+            reviewStatus: 'approved' as const,
+          },
+        }),
+      ]),
+    ];
+    const { getByTestId } = render(<DetectionResultsScreen />);
+
+    fireEvent.press(getByTestId('save-all-button'));
+
+    await waitFor(() => {
+      expect(mockGoBack).toHaveBeenCalled();
+    });
+    expect(alertSpy).not.toHaveBeenCalled();
   });
 
   // ==========================================================================

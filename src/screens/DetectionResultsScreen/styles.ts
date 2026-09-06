@@ -81,6 +81,9 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     justifyContent: 'flex-end' as const,
   },
   boxLabel: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
     paddingHorizontal: SPACING.xs,
     paddingVertical: 2,
   },
