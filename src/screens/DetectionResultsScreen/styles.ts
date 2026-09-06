@@ -79,11 +79,13 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     borderWidth: 2,
     borderRadius: 4,
     justifyContent: 'flex-end' as const,
+    alignItems: 'flex-start' as const,
   },
   boxLabel: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: 6,
+    maxWidth: '100%' as const,
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.xs,
   },
@@ -91,5 +93,6 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     ...TYPOGRAPHY.bodySmall,
     fontWeight: '600' as const,
     color: '#FFFFFF',
+    flexShrink: 1,
   },
 });

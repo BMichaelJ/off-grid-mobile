@@ -192,13 +192,13 @@ describe('DetectionResultsScreen', () => {
     expect(getByTestId('bounding-box-det-2')).toBeTruthy();
   });
 
-  it('shows species label on bounding box', () => {
+  it('shows a Tap to Review label on an unreviewed bounding box', () => {
     mockObservations = [
       makeObservation([makeDetection({ species: 'zebra_plains' })]),
     ];
 
     const { getByText } = render(<DetectionResultsScreen />);
-    expect(getByText('zebra_plains \u00b7 Tap to Review')).toBeTruthy();
+    expect(getByText('Tap to Review')).toBeTruthy();
   });
 
   it('shows a tap-to-review hint on an unreviewed bounding box', () => {

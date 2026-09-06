@@ -30,7 +30,7 @@ export const BoundingBoxOverlay: React.FC<BoundingBoxOverlayProps> = ({
   const isReviewed = matchResult.reviewStatus === 'approved';
   const labelText = isReviewed
     ? resolveName(matchResult.approvedIndividual) ?? species
-    : `${species} \u00b7 Tap to Review`;
+    : 'Tap to Review';
 
   return (
     <TouchableOpacity
@@ -64,7 +64,9 @@ export const BoundingBoxOverlay: React.FC<BoundingBoxOverlayProps> = ({
             testID={`box-tap-hint-${id}`}
           />
         )}
-        <Text style={styles.boxLabelText}>{labelText}</Text>
+        <Text style={styles.boxLabelText} numberOfLines={2}>
+          {labelText}
+        </Text>
       </View>
     </TouchableOpacity>
   );
