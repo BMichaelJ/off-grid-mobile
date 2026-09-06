@@ -23,6 +23,7 @@ import Geolocation, {
 } from '@react-native-community/geolocation';
 import { Alert, PermissionsAndroid, Platform } from 'react-native';
 import RNFS from 'react-native-fs';
+import DeviceInfo from 'react-native-device-info';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import { wildlifePipeline } from '../../../src/services/wildlifePipeline';
 import { useWildlifeStore } from '../../../src/stores/wildlifeStore';
@@ -275,6 +276,7 @@ describe('CaptureScreen', () => {
       expect(mockLaunchImageLibrary).toHaveBeenCalledWith({
         mediaType: 'photo',
         quality: 1,
+        selectionLimit: 0,
       });
     });
   });
@@ -724,5 +726,184 @@ describe('CaptureScreen', () => {
     });
 
     expect(mockProcessPhoto).not.toHaveBeenCalled();
+  });
+
+  // ==========================================================================
+  // Batch Import From Gallery
+  // ==========================================================================
+
+  describe('batch import from gallery', () => {
+    it('still processes a single selected gallery photo through the normal single-photo flow', async () => {
+      mockLaunchImageLibrary.mockResolvedValue({
+        assets: [{ uri: 'file:///mock/gallery.jpg' }],
+      });
+
+      const { getByTestId } = render(<CaptureScreen />);
+      fireEvent.press(getByTestId('choose-gallery-button'));
+
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('DetectionResults', {
+          observationId: 'obs-123',
+        });
+      });
+    });
+
+    it('processes multiple selected photos sequentially and lands on the Observations tab', async () => {
+      mockLaunchImageLibrary.mockResolvedValue({
+        assets: [
+          { uri: 'file:///mock/gallery-1.jpg' },
+          { uri: 'file:///mock/gallery-2.jpg' },
+          { uri: 'file:///mock/gallery-3.jpg' },
+        ],
+      });
+      let callCount = 0;
+      mockProcessPhoto.mockImplementation(() => {
+        callCount += 1;
+        return Promise.resolve({
+          ...MOCK_PIPELINE_RESULT,
+          observationId: `obs-batch-${callCount}`,
+          photoUri: `file:///mock/gallery-${callCount}.jpg`,
+        });
+      });
+
+      const { getByTestId } = render(<CaptureScreen />);
+      fireEvent.press(getByTestId('choose-gallery-button'));
+
+      await waitFor(() => expect(mockProcessPhoto).toHaveBeenCalledTimes(3));
+      await waitFor(() =>
+        expect(mockNavigate).toHaveBeenCalledWith('Main', { screen: 'ObservationsTab' }),
+      );
+      expect(Alert.alert).toHaveBeenCalledWith(
+        'Batch import complete',
+        expect.stringContaining('Saved 3 of 3'),
+      );
+      expect(useWildlifeStore.getState().observations).toHaveLength(3);
+    });
+
+    it('shows batch progress while processing multiple photos', async () => {
+      mockLaunchImageLibrary.mockResolvedValue({
+        assets: [
+          { uri: 'file:///mock/gallery-1.jpg' },
+          { uri: 'file:///mock/gallery-2.jpg' },
+        ],
+      });
+      let resolveFirst!: (value: unknown) => void;
+      let callCount = 0;
+      mockProcessPhoto.mockImplementation(() => {
+        callCount += 1;
+        if (callCount === 1) {
+          return new Promise(resolve => {
+            resolveFirst = resolve;
+          });
+        }
+        return Promise.resolve({
+          ...MOCK_PIPELINE_RESULT,
+          observationId: `obs-batch-${callCount}`,
+          photoUri: `file:///mock/gallery-${callCount}.jpg`,
+        });
+      });
+
+      const { getByTestId, getByText } = render(<CaptureScreen />);
+      fireEvent.press(getByTestId('choose-gallery-button'));
+
+      await waitFor(() => expect(getByText('Processing 1 of 2...')).toBeTruthy());
+
+      await act(async () => {
+        resolveFirst({
+          ...MOCK_PIPELINE_RESULT,
+          observationId: 'obs-batch-1',
+          photoUri: 'file:///mock/gallery-1.jpg',
+        });
+      });
+
+      await waitFor(() => expect(mockProcessPhoto).toHaveBeenCalledTimes(2));
+    });
+
+    it('continues past a photo that fails and reports it in the batch summary', async () => {
+      mockLaunchImageLibrary.mockResolvedValue({
+        assets: [
+          { uri: 'file:///mock/gallery-1.jpg' },
+          { uri: 'file:///mock/gallery-2.jpg' },
+        ],
+      });
+      let callCount = 0;
+      mockProcessPhoto.mockImplementation(() => {
+        callCount += 1;
+        if (callCount === 1) {
+          return Promise.reject(new Error('disk full'));
+        }
+        return Promise.resolve({
+          ...MOCK_PIPELINE_RESULT,
+          observationId: `obs-batch-${callCount}`,
+          photoUri: `file:///mock/gallery-${callCount}.jpg`,
+        });
+      });
+
+      const { getByTestId } = render(<CaptureScreen />);
+      fireEvent.press(getByTestId('choose-gallery-button'));
+
+      await waitFor(() =>
+        expect(mockNavigate).toHaveBeenCalledWith('Main', { screen: 'ObservationsTab' }),
+      );
+      expect(Alert.alert).toHaveBeenCalledWith(
+        'Batch import finished with errors',
+        expect.stringContaining('Photo 1'),
+      );
+      expect(useWildlifeStore.getState().observations).toHaveLength(1);
+    });
+
+    it('warns and waits for confirmation before a batch when storage is low', async () => {
+      mockLaunchImageLibrary.mockResolvedValue({
+        assets: [
+          { uri: 'file:///mock/gallery-1.jpg' },
+          { uri: 'file:///mock/gallery-2.jpg' },
+        ],
+      });
+      (DeviceInfo.getFreeDiskStorage as jest.Mock).mockResolvedValueOnce(100 * 1024 * 1024);
+      (Alert.alert as jest.Mock).mockImplementationOnce(
+        (_title: string, _message: string, buttons?: Array<{ text: string; onPress?: () => void }>) => {
+          buttons?.find(b => b.text === 'Continue')?.onPress?.();
+        },
+      );
+
+      const { getByTestId } = render(<CaptureScreen />);
+      fireEvent.press(getByTestId('choose-gallery-button'));
+
+      await waitFor(() =>
+        expect(Alert.alert).toHaveBeenCalledWith(
+          'Before processing this batch',
+          expect.stringContaining('Storage is low'),
+          expect.any(Array),
+        ),
+      );
+      await waitFor(() => expect(mockProcessPhoto).toHaveBeenCalledTimes(2));
+    });
+
+    it('does not process the batch when the user cancels the low-storage warning', async () => {
+      mockLaunchImageLibrary.mockResolvedValue({
+        assets: [
+          { uri: 'file:///mock/gallery-1.jpg' },
+          { uri: 'file:///mock/gallery-2.jpg' },
+        ],
+      });
+      (DeviceInfo.getFreeDiskStorage as jest.Mock).mockResolvedValueOnce(100 * 1024 * 1024);
+      (Alert.alert as jest.Mock).mockImplementationOnce(
+        (_title: string, _message: string, buttons?: Array<{ text: string; onPress?: () => void }>) => {
+          buttons?.find(b => b.text === 'Cancel')?.onPress?.();
+        },
+      );
+
+      const { getByTestId } = render(<CaptureScreen />);
+      fireEvent.press(getByTestId('choose-gallery-button'));
+
+      await waitFor(() =>
+        expect(Alert.alert).toHaveBeenCalledWith(
+          'Before processing this batch',
+          expect.stringContaining('Storage is low'),
+          expect.any(Array),
+        ),
+      );
+      expect(mockProcessPhoto).not.toHaveBeenCalled();
+    });
   });
 });
