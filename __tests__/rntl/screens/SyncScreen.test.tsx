@@ -177,22 +177,22 @@ describe('SyncScreen', () => {
     expect(getByTestId('sync-screen')).toBeTruthy();
   });
 
-  it('shows "Sync Queue" title', () => {
+  it('shows "Upload Queue" title', () => {
     const { getByText } = render(<SyncScreen />);
-    expect(getByText('Sync Queue')).toBeTruthy();
+    expect(getByText('Upload Queue')).toBeTruthy();
   });
 
   // ==========================================================================
-  // Sync All button
+  // Upload All button
   // ==========================================================================
 
-  it('shows "Sync All" button', () => {
+  it('shows "Upload All" button', () => {
     const { getByTestId, getByText } = render(<SyncScreen />);
     expect(getByTestId('sync-all-button')).toBeTruthy();
-    expect(getByText('Sync All')).toBeTruthy();
+    expect(getByText('Upload All')).toBeTruthy();
   });
 
-  it('Sync All calls the sync engine and shows a summary alert', async () => {
+  it('Upload All calls the sync engine and shows a summary alert', async () => {
     mockSyncAllObservations.mockResolvedValue({ synced: 2, uploaded: 1, waitingForReview: 1, failed: 0 });
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     const { getByTestId } = render(<SyncScreen />);
@@ -201,7 +201,7 @@ describe('SyncScreen', () => {
 
     await waitFor(() => expect(mockSyncAllObservations).toHaveBeenCalled());
     await waitFor(() =>
-      expect(alertSpy).toHaveBeenCalledWith('Sync', '2 up to date (1 uploaded), 1 waiting on review'),
+      expect(alertSpy).toHaveBeenCalledWith('Upload', '2 up to date (1 uploaded), 1 waiting on review'),
     );
   });
 
@@ -215,14 +215,14 @@ describe('SyncScreen', () => {
     expect(mockSyncAllObservations).not.toHaveBeenCalled();
   });
 
-  it('Sync All shows a generic message when there is nothing queued', async () => {
+  it('Upload All shows a generic message when there is nothing queued', async () => {
     mockSyncAllObservations.mockResolvedValue({ synced: 0, uploaded: 0, waitingForReview: 0, failed: 0 });
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     const { getByTestId } = render(<SyncScreen />);
 
     fireEvent.press(getByTestId('sync-all-button'));
 
-    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Sync', 'Nothing to sync'));
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Upload', 'Nothing to upload'));
   });
 
   // ==========================================================================
@@ -401,7 +401,7 @@ describe('SyncScreen', () => {
     fireEvent.press(getByTestId('sync-action-0'));
 
     await waitFor(() =>
-      expect(alertSpy).toHaveBeenCalledWith('Sync failed', 'blob upload failed: HTTP 500'),
+      expect(alertSpy).toHaveBeenCalledWith('Upload failed', 'blob upload failed: HTTP 500'),
     );
   });
 
@@ -472,7 +472,7 @@ describe('SyncScreen', () => {
     useWildlifeStore.setState({ syncQueue: [] });
 
     const { getByText } = render(<SyncScreen />);
-    expect(getByText('No items in sync queue')).toBeTruthy();
+    expect(getByText('No observations to upload')).toBeTruthy();
   });
 
   it('does not show empty state when queue has items', () => {
@@ -482,6 +482,6 @@ describe('SyncScreen', () => {
     });
 
     const { queryByText } = render(<SyncScreen />);
-    expect(queryByText('No items in sync queue')).toBeNull();
+    expect(queryByText('No observations to upload')).toBeNull();
   });
 });

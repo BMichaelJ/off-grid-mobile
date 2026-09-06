@@ -70,10 +70,10 @@ export const SyncScreen: React.FC = () => {
       if (result.synced > 0) parts.push(`${result.synced} up to date (${result.uploaded} uploaded)`);
       if (result.waitingForReview > 0) parts.push(`${result.waitingForReview} waiting on review`);
       if (result.failed > 0) parts.push(`${result.failed} failed`);
-      Alert.alert('Sync', parts.length > 0 ? parts.join(', ') : 'Nothing to sync');
+      Alert.alert('Upload', parts.length > 0 ? parts.join(', ') : 'Nothing to upload');
     } catch (error) {
-      logger.error('[SyncScreen] Sync All failed unexpectedly:', error);
-      Alert.alert('Sync', 'Sync failed unexpectedly -- check the logs and try again.');
+      logger.error('[SyncScreen] Upload All failed unexpectedly:', error);
+      Alert.alert('Upload', 'Upload failed unexpectedly -- check the logs and try again.');
     } finally {
       setIsSyncing(false);
     }
@@ -96,11 +96,11 @@ export const SyncScreen: React.FC = () => {
       try {
         const outcome = await syncObservation(observation);
         if (outcome.status === 'failed') {
-          Alert.alert('Sync failed', outcome.message);
+          Alert.alert('Upload failed', outcome.message);
         }
       } catch (error) {
         logger.error(`[SyncScreen] Upload failed unexpectedly for ${item.observationId}:`, error);
-        Alert.alert('Sync failed', 'An unexpected error occurred -- check the logs and try again.');
+        Alert.alert('Upload failed', 'An unexpected error occurred -- check the logs and try again.');
       } finally {
         setSyncingObservationId(null);
       }
@@ -158,7 +158,7 @@ export const SyncScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.container} testID="sync-screen" edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>Sync Queue</Text>
+        <Text style={styles.title}>Upload Queue</Text>
       </View>
 
       <TouchableOpacity
@@ -172,14 +172,14 @@ export const SyncScreen: React.FC = () => {
         ) : (
           <Icon name="upload-cloud" size={16} color={styles.syncAllText.color} />
         )}
-        <Text style={styles.syncAllText}>{isSyncing ? 'Syncing...' : 'Sync All'}</Text>
+        <Text style={styles.syncAllText}>{isSyncing ? 'Uploading...' : 'Upload All'}</Text>
       </TouchableOpacity>
 
 
       {syncQueue.length === 0 ? (
         <View style={styles.emptyState}>
           <Icon name="inbox" size={48} color={styles.emptyTitle.color} />
-          <Text style={styles.emptyTitle}>No items in sync queue</Text>
+          <Text style={styles.emptyTitle}>No observations to upload</Text>
         </View>
       ) : (
         <FlatList

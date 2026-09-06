@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo } from 'react';
 import { View, Text, Image, TouchableOpacity, FlatList } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -10,6 +10,7 @@ import { useWildlifeStore } from '../../stores';
 import type { RootStackParamList } from '../../navigation/types';
 import type { MatchCandidate } from '../../types';
 import { toDisplayUri } from '../../utils/imageUri';
+import { SPACING } from '../../constants';
 import { CandidateCard } from './CandidateCard';
 import { createStyles } from './styles';
 import { usePackIndividualInfo } from './usePackIndividualInfo';
@@ -30,6 +31,7 @@ interface ResolvedCandidate {
 export const MatchReviewScreen: React.FC = () => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<MatchReviewRouteProp>();
   const { observationId, detectionId } = route.params;
@@ -159,9 +161,10 @@ export const MatchReviewScreen: React.FC = () => {
   }, [navigation]);
 
   const renderCandidate = useCallback(
-    ({ item }: { item: ResolvedCandidate }) => (
+    ({ item, index }: { item: ResolvedCandidate; index: number }) => (
       <CandidateCard
         candidate={item.candidate}
+        rank={index + 1}
         name={item.name}
         displayId={item.displayId}
         refPhotoUri={item.refPhotoUri}
@@ -249,7 +252,7 @@ export const MatchReviewScreen: React.FC = () => {
         }
       />
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: SPACING.md + insets.bottom }]} testID="match-review-footer">
         <TouchableOpacity
           style={styles.newIndividualButton}
           onPress={handleNoMatch}

@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, TextInput, Alert, ScrollView } from 'react-native';
+import { View, Text, TextInput, Alert, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -56,7 +56,11 @@ export const SelectRoleScreen: React.FC = () => {
         <Text style={styles.title}>Complete Your Profile</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Text style={styles.subtitle}>
           Your access is assigned from your Microsoft account.
         </Text>
@@ -89,6 +93,7 @@ export const SelectRoleScreen: React.FC = () => {
         <Text style={styles.footnote}>
           Approved field researchers receive researcher access automatically.
         </Text>
+        </KeyboardAvoidingView>
       </ScrollView>
     </SafeAreaView>
   );

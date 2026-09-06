@@ -145,7 +145,7 @@ const MainTabs: React.FC = () => {
       <Tab.Screen
         name="SyncTab"
         component={SyncScreen}
-        options={{ tabBarLabel: 'Sync', tabBarButtonTestID: 'sync-tab' }}
+        options={{ tabBarLabel: 'Upload', tabBarButtonTestID: 'sync-tab' }}
         listeners={() => ({
           tabPress: () => { triggerHaptic('selection'); },
         })}

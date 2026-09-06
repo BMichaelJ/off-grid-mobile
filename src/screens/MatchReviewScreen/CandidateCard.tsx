@@ -8,6 +8,7 @@ import type { createStyles } from './styles';
 
 interface CandidateCardProps {
   candidate: MatchCandidate;
+  rank: number;
   name: string;
   displayId: string;
   refPhotoUri: string | null;
@@ -17,6 +18,7 @@ interface CandidateCardProps {
 
 export const CandidateCard: React.FC<CandidateCardProps> = ({
   candidate,
+  rank,
   name,
   displayId,
   refPhotoUri,
@@ -24,7 +26,6 @@ export const CandidateCard: React.FC<CandidateCardProps> = ({
   styles,
 }) => {
   const { colors } = useTheme();
-  const scorePercent = `${Math.round(candidate.score * 100)}%`;
 
   return (
     <View
@@ -51,11 +52,12 @@ export const CandidateCard: React.FC<CandidateCardProps> = ({
           {displayId}
         </Text>
         <View style={styles.candidateScoreRow}>
-          <Text style={styles.candidateScore}>{scorePercent}</Text>
+          <Text style={styles.candidateRank}>{`Candidate ${rank}`}</Text>
           <View style={styles.sourceBadge}>
             <Text style={styles.sourceBadgeText}>{candidate.source}</Text>
           </View>
         </View>
+        <Text style={styles.confirmationNotice}>Researcher confirmation required</Text>
       </View>
 
       <TouchableOpacity

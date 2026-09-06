@@ -205,10 +205,11 @@ describe('MatchReviewScreen', () => {
     expect(getByTestId('candidate-ind-2')).toBeTruthy();
   });
 
-  it('shows candidate scores as percentages', () => {
-    const { getByText } = render(<MatchReviewScreen />);
-    expect(getByText('92%')).toBeTruthy();
-    expect(getByText('85%')).toBeTruthy();
+  it('shows candidate rank and a confirmation-required notice instead of a raw score', () => {
+    const { getByText, getAllByText } = render(<MatchReviewScreen />);
+    expect(getByText('Candidate 1')).toBeTruthy();
+    expect(getByText('Candidate 2')).toBeTruthy();
+    expect(getAllByText('Researcher confirmation required')).toHaveLength(2);
   });
 
   it('shows source badges on candidates', () => {
@@ -400,6 +401,28 @@ describe('MatchReviewScreen', () => {
     expect(mockUpdateDetection).not.toHaveBeenCalled();
     expect(mockAddLocalIndividual).not.toHaveBeenCalled();
     expect(mockGoBack).toHaveBeenCalled();
+  });
+
+  // ==========================================================================
+  // Bottom inset (Android gesture/navigation bar regression)
+  // ==========================================================================
+
+  it('pushes the footer (No Match / Skip) above the device bottom inset instead of a fixed padding', () => {
+    const { useSafeAreaInsets } = require('react-native-safe-area-context');
+    (useSafeAreaInsets as jest.Mock).mockReturnValue({
+      top: 0,
+      right: 0,
+      bottom: 48,
+      left: 0,
+    });
+
+    const { getByTestId } = render(<MatchReviewScreen />);
+    const footer = getByTestId('match-review-footer');
+    const flattened = Object.assign(
+      {},
+      ...(Array.isArray(footer.props.style) ? footer.props.style : [footer.props.style]),
+    );
+    expect(flattened.paddingBottom).toBeGreaterThanOrEqual(48);
   });
 
   // ==========================================================================

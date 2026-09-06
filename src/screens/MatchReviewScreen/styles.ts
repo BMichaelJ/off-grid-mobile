@@ -115,10 +115,15 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     gap: SPACING.sm,
     marginTop: SPACING.xs,
   },
-  candidateScore: {
+  candidateRank: {
     ...TYPOGRAPHY.bodySmall,
     color: colors.primary,
     fontWeight: '600' as const,
+  },
+  confirmationNotice: {
+    ...TYPOGRAPHY.metaSmall,
+    color: colors.textMuted,
+    marginTop: SPACING.xs,
   },
   sourceBadge: {
     paddingHorizontal: SPACING.sm,
@@ -146,7 +151,7 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   // Footer actions
   footer: {
     paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
+    paddingTop: SPACING.md,
     gap: SPACING.sm,
   },
   newIndividualButton: {
