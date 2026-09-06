@@ -11,8 +11,10 @@
 
 import React from 'react';
 import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { useWildlifeStore } from '../../../src/stores/wildlifeStore';
+import { useAppStore } from '../../../src/stores/appStore';
+import { MIEWID_LITERT_MODEL_NAME, MIEWID_MODEL_NAME } from '../../../src/config/modelSources';
 import type {
   EmbeddingPack,
   MiewIDModelRecord,
@@ -541,6 +543,54 @@ describe('PacksScreen', () => {
       );
       expect(mockResolveMiewidModelSource).toHaveBeenCalled();
       expect(mockPrepareMiewidModel).toHaveBeenCalled();
+    });
+
+    it('requests the standard ONNX model name when GPU preference is off', async () => {
+      mockPrepareMiewidModel.mockResolvedValue(readyModel);
+      mockAcquireLatestPack.mockResolvedValue({ ok: true, pack: createPack() });
+
+      const { getByTestId } = render(<PacksScreen />);
+      fireEvent.press(getByTestId('download-pack-button'));
+
+      await waitFor(() => expect(mockResolveMiewidModelSource).toHaveBeenCalled());
+      expect(mockResolveMiewidModelSource).toHaveBeenCalledWith(MIEWID_MODEL_NAME);
+    });
+
+    it('requests the LiteRT/GPU model name when the GPU preference is on (Android)', async () => {
+      const originalPlatformOsDescriptor = Object.getOwnPropertyDescriptor(Platform, 'OS');
+      Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'android' });
+      useAppStore.getState().setPreferGpuModel(true);
+      mockPrepareMiewidModel.mockResolvedValue(readyModel);
+      mockAcquireLatestPack.mockResolvedValue({ ok: true, pack: createPack() });
+
+      try {
+        const { getByTestId } = render(<PacksScreen />);
+        fireEvent.press(getByTestId('download-pack-button'));
+
+        await waitFor(() => expect(mockResolveMiewidModelSource).toHaveBeenCalled());
+        expect(mockResolveMiewidModelSource).toHaveBeenCalledWith(MIEWID_LITERT_MODEL_NAME);
+      } finally {
+        useAppStore.getState().setPreferGpuModel(false);
+        if (originalPlatformOsDescriptor) {
+          Object.defineProperty(Platform, 'OS', originalPlatformOsDescriptor);
+        }
+      }
+    });
+
+    it('ignores the GPU preference on iOS and still requests the ONNX model', async () => {
+      useAppStore.getState().setPreferGpuModel(true);
+      mockPrepareMiewidModel.mockResolvedValue(readyModel);
+      mockAcquireLatestPack.mockResolvedValue({ ok: true, pack: createPack() });
+
+      try {
+        const { getByTestId } = render(<PacksScreen />);
+        fireEvent.press(getByTestId('download-pack-button'));
+
+        await waitFor(() => expect(mockResolveMiewidModelSource).toHaveBeenCalled());
+        expect(mockResolveMiewidModelSource).toHaveBeenCalledWith(MIEWID_MODEL_NAME);
+      } finally {
+        useAppStore.getState().setPreferGpuModel(false);
+      }
     });
 
     it('replaces a ready model when the latest artifact identity changed', async () => {

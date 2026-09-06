@@ -41,12 +41,16 @@ jest.mock('../../../src/components/AnimatedListItem', () => ({
 
 const mockSetOnboardingComplete = jest.fn();
 const mockSetThemeMode = jest.fn();
+const mockSetPreferGpuModel = jest.fn();
+let mockPreferGpuModel = false;
 jest.mock('../../../src/stores', () => ({
   useAppStore: jest.fn((selector?: any) => {
     const state = {
       setOnboardingComplete: mockSetOnboardingComplete,
       themeMode: 'system',
       setThemeMode: mockSetThemeMode,
+      preferGpuModel: mockPreferGpuModel,
+      setPreferGpuModel: mockSetPreferGpuModel,
     };
     return selector ? selector(state) : state;
   }),
@@ -150,5 +154,45 @@ describe('SettingsScreen', () => {
       routes: [{ name: 'Onboarding' }],
     });
     expect(mockDispatch).toHaveBeenCalled();
+  });
+
+  describe('GPU acceleration toggle', () => {
+    const { Platform } = require('react-native');
+    const originalPlatformOsDescriptor = Object.getOwnPropertyDescriptor(Platform, 'OS');
+
+    afterEach(() => {
+      mockPreferGpuModel = false;
+      if (originalPlatformOsDescriptor) {
+        Object.defineProperty(Platform, 'OS', originalPlatformOsDescriptor);
+      }
+    });
+
+    it('shows the GPU acceleration toggle on Android', () => {
+      Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'android' });
+
+      const { getByTestId, getByText } = render(<SettingsScreen />);
+
+      expect(getByText('GPU acceleration')).toBeTruthy();
+      expect(getByTestId('gpu-acceleration-toggle')).toBeTruthy();
+    });
+
+    it('does not show the GPU acceleration toggle on iOS', () => {
+      Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'ios' });
+
+      const { queryByTestId, queryByText } = render(<SettingsScreen />);
+
+      expect(queryByText('GPU acceleration')).toBeNull();
+      expect(queryByTestId('gpu-acceleration-toggle')).toBeNull();
+    });
+
+    it('calls setPreferGpuModel when the toggle is switched', () => {
+      Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'android' });
+      mockPreferGpuModel = false;
+
+      const { getByTestId } = render(<SettingsScreen />);
+      fireEvent(getByTestId('gpu-acceleration-toggle'), 'valueChange', true);
+
+      expect(mockSetPreferGpuModel).toHaveBeenCalledWith(true);
+    });
   });
 });

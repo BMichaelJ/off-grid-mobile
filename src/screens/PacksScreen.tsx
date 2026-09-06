@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { View, Text, FlatList, Alert } from 'react-native';
+import { View, Text, FlatList, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -7,12 +7,12 @@ import { AnimatedListItem } from '../components/AnimatedListItem';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { useThemedStyles } from '../theme/useThemedStyles';
-import type { ThemeColors, ThemeShadows } from '../theme';
-import { TYPOGRAPHY, SPACING } from '../constants';
+import { useAppStore } from '../stores';
 import { useWildlifeStore } from '../stores/wildlifeStore';
 import type { EmbeddingPack } from '../types/wildlife';
 import type { RootStackParamList } from '../navigation/types';
 import { GANESHA_PROJECT_ID } from '../config/ganeshaApi';
+import { MIEWID_LITERT_MODEL_NAME, MIEWID_MODEL_NAME } from '../config/modelSources';
 import { resolveMiewidModelSource } from '../services/modelSourceResolver';
 import { prepareMiewidModel } from '../services/miewidModelManager';
 import {
@@ -21,6 +21,7 @@ import {
 } from '../services/packDownloadService';
 import { ensureSignedIn } from '../utils/authGate';
 import logger from '../utils/logger';
+import { createStyles } from './PacksScreen.styles';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -53,6 +54,7 @@ export const PacksScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const styles = useThemedStyles(createStyles);
   const { packs, miewidModel } = useWildlifeStore();
+  const preferGpuModel = useAppStore((s) => s.preferGpuModel);
   const [isDownloading, setIsDownloading] = useState(false);
   const [packUpdateState, setPackUpdateState] =
     useState<PackUpdateState>('unchecked');
@@ -104,7 +106,13 @@ export const PacksScreen: React.FC = () => {
       if (!(await ensureSignedIn(navigation))) {
         return;
       }
-      const resolvedSource = await resolveMiewidModelSource();
+      // GPU/LiteRT is Android-only (WS7) -- the toggle is a no-op on iOS,
+      // which always resolves the standard ONNX model.
+      const modelName =
+        preferGpuModel && Platform.OS === 'android'
+          ? MIEWID_LITERT_MODEL_NAME
+          : MIEWID_MODEL_NAME;
+      const resolvedSource = await resolveMiewidModelSource(modelName);
       if (!resolvedSource.ok) {
         Alert.alert(
           'Download failed',
@@ -156,7 +164,7 @@ export const PacksScreen: React.FC = () => {
       updateInFlight.current = false;
       setIsDownloading(false);
     }
-  }, [miewidModel, navigation]);
+  }, [miewidModel, navigation, preferGpuModel]);
 
   const handlePackStatusCheck = useCallback(async () => {
     if (updateInFlight.current) {
@@ -278,73 +286,3 @@ export const PacksScreen: React.FC = () => {
     </SafeAreaView>
   );
 };
-
-const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  header: {
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-    ...shadows.small,
-    zIndex: 1,
-  },
-  title: {
-    ...TYPOGRAPHY.h2,
-    color: colors.text,
-  },
-  list: {
-    padding: SPACING.lg,
-  },
-  updateSection: {
-    marginTop: SPACING.lg,
-  },
-  updateStatus: {
-    ...TYPOGRAPHY.bodySmall,
-    color: colors.textSecondary,
-    textAlign: 'center' as const,
-  },
-  updateButton: {
-    marginTop: SPACING.sm,
-  },
-  packName: {
-    ...TYPOGRAPHY.h2,
-    color: colors.text,
-    marginBottom: SPACING.xs,
-  },
-  packCount: {
-    ...TYPOGRAPHY.bodySmall,
-    color: colors.textSecondary,
-    marginBottom: SPACING.xs,
-  },
-  packMeta: {
-    ...TYPOGRAPHY.meta,
-    color: colors.textMuted,
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center' as const,
-    alignItems: 'center' as const,
-    paddingHorizontal: SPACING.xxl,
-  },
-  emptyTitle: {
-    ...TYPOGRAPHY.h2,
-    color: colors.text,
-    fontWeight: '400' as const,
-    marginBottom: SPACING.sm,
-  },
-  emptyText: {
-    ...TYPOGRAPHY.bodySmall,
-    color: colors.textSecondary,
-    textAlign: 'center' as const,
-    lineHeight: 18,
-  },
-  downloadButton: {
-    marginTop: SPACING.lg,
-    minWidth: 220,
-  },
-});

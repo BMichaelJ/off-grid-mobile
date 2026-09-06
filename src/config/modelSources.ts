@@ -28,3 +28,9 @@ export interface ModelSource {
 
 /** Model name key the backend's `/models/{model_name}/latest` endpoint expects. */
 export const MIEWID_MODEL_NAME = 'miewid';
+
+/**
+ * Model name key for the LiteRT/GPU artifact of the same MiewID version
+ * (WS7). Published 2026-09-06 to the model-artifacts blob container.
+ */
+export const MIEWID_LITERT_MODEL_NAME = 'miewid-litert';
