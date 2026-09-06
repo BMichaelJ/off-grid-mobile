@@ -283,7 +283,7 @@ export const useWildlifeStore = create<WildlifeState>()(
     {
       name: 'wildlife-store',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 2,
+      version: 3,
       migrate: (persisted, fromVersion) => {
         const state = persisted as Record<string, unknown>;
         if (fromVersion < 1) {
@@ -300,6 +300,7 @@ export const useWildlifeStore = create<WildlifeState>()(
                 sizeBytes: null,
                 status: 'missing',
                 verifiedAt: null,
+                format: 'onnx',
               } satisfies MiewIDModelRecord)
             : null;
           delete state.miewidModelPath;
@@ -312,6 +313,12 @@ export const useWildlifeStore = create<WildlifeState>()(
             ...pack,
             packVersion: pack.packVersion ?? 'unknown',
           }));
+        }
+        if (fromVersion < 3) {
+          const legacyModel = state.miewidModel as (MiewIDModelRecord & { format?: unknown }) | null | undefined;
+          if (legacyModel && !legacyModel.format) {
+            state.miewidModel = { ...legacyModel, format: 'onnx' };
+          }
         }
         return state;
       },

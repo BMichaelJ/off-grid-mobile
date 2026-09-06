@@ -35,6 +35,7 @@ const makeSource = (overrides: Partial<ModelSource> = {}): ModelSource => ({
   url: 'https://example.org/miewid_v4_1_fp16.onnx',
   expectedSha256: MODEL_SHA,
   expectedSizeBytes: 1000,
+  format: 'onnx',
   ...overrides,
 });
 
@@ -111,6 +112,26 @@ describe('modelDownloadService.downloadModel', () => {
       `/mock/documents/models/miewid-4.1.0-${MODEL_SHA}.onnx`,
       `/mock/documents/models/miewid-4.1.0-${OTHER_MODEL_SHA}.onnx`,
     ]);
+  });
+
+  it('uses a .tflite destination for a tflite-format source', async () => {
+    mockDownloadResults({ statusCode: 200 });
+
+    const outcome = await modelDownloadService.downloadModel(
+      makeSource({ format: 'tflite', url: 'https://example.org/miewid_v4_1.tflite' }),
+      fastOpts,
+    );
+
+    expect(outcome).toEqual({
+      ok: true,
+      path: `/mock/documents/models/miewid-4.1.0-${MODEL_SHA}.tflite`,
+      sha256: MODEL_SHA,
+      sizeBytes: 1000,
+    });
+    expect(mockMoveFile).toHaveBeenCalledWith(
+      `/mock/documents/staging/miewid-4.1.0-${MODEL_SHA}.tflite.part`,
+      `/mock/documents/models/miewid-4.1.0-${MODEL_SHA}.tflite`,
+    );
   });
 
   it('reuses a verified hash-keyed model already on disk', async () => {

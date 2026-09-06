@@ -199,6 +199,7 @@ describe('CaptureScreen', () => {
         sizeBytes: 1000,
         status: 'ready',
         verifiedAt: '2026-08-01T00:00:00.000Z',
+        format: 'onnx',
       },
     });
     mockProcessPhoto.mockResolvedValue(MOCK_PIPELINE_RESULT);
@@ -465,6 +466,7 @@ describe('CaptureScreen', () => {
         sizeBytes: 1000,
         status: 'corrupt',
         verifiedAt: null,
+        format: 'onnx',
       },
     });
 

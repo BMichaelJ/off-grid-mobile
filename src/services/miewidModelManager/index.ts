@@ -50,6 +50,7 @@ const candidateRecord = (
   sizeBytes: source.expectedSizeBytes ?? null,
   status: 'downloading',
   verifiedAt: null,
+  format: source.format,
   ...overrides,
 });
 

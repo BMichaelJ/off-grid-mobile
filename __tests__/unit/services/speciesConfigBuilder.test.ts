@@ -61,6 +61,7 @@ function makeModel(overrides: Partial<MiewIDModelRecord> = {}): MiewIDModelRecor
     sizeBytes: 1000,
     status: 'ready',
     verifiedAt: '2026-03-01T00:00:00Z',
+    format: 'onnx',
     ...overrides,
   };
 }

@@ -132,6 +132,7 @@ const makeReadyModel = (
   sizeBytes: 204_011_297,
   status: 'ready',
   verifiedAt: '2026-08-01T00:00:00.000Z',
+  format: 'onnx',
   ...overrides,
 });
 

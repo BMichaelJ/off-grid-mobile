@@ -135,6 +135,7 @@ const readyModel: MiewIDModelRecord = {
   sizeBytes: 204_011_297,
   status: 'ready',
   verifiedAt: '2026-08-01T00:00:00.000Z',
+  format: 'onnx',
 };
 
 const latestModelSource = {
@@ -143,6 +144,7 @@ const latestModelSource = {
   url: 'https://example/model.onnx',
   expectedSha256: 'abc123',
   expectedSizeBytes: 204_011_297,
+  format: 'onnx' as const,
 };
 
 describe('PacksScreen', () => {

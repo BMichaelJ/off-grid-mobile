@@ -1,3 +1,5 @@
+import type { ModelFormat } from '../types/wildlife';
+
 /**
  * Download sources for on-device models.
  *
@@ -20,6 +22,8 @@ export interface ModelSource {
   expectedSizeBytes?: number;
   /** Extra request headers (e.g. auth for a private HF repo). */
   headers?: Record<string, string>;
+  /** Which runtime this artifact needs — see ModelFormat. */
+  format: ModelFormat;
 }
 
 /** Model name key the backend's `/models/{model_name}/latest` endpoint expects. */

@@ -38,6 +38,7 @@ const makeRecord = (
   sizeBytes: 103_859_027,
   status: 'ready',
   verifiedAt: '2026-08-01T00:00:00.000Z',
+  format: 'onnx',
   ...overrides,
 });
 
@@ -167,6 +168,7 @@ describe('acquireMiewidModel', () => {
     url: 'https://example.org/miewid.onnx',
     expectedSha256: 'abc123',
     expectedSizeBytes: 1000,
+    format: 'onnx' as const,
   };
 
   beforeEach(() => {
@@ -251,6 +253,7 @@ describe('prepareMiewidModel', () => {
     url: 'https://example.org/miewid-4.2.onnx',
     expectedSha256: 'def456',
     expectedSizeBytes: 2000,
+    format: 'onnx' as const,
   };
 
   beforeEach(() => {

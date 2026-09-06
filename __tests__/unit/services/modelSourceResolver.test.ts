@@ -57,6 +57,7 @@ describe('resolveMiewidModelSource', () => {
         expectedSha256:
           '1ff7c7879bb9e6b1847d19e1905e80f4e960aeed645dce9a52b9aaded2f0f763',
         expectedSizeBytes: 204_011_297,
+        format: 'onnx',
       },
     });
   });
@@ -93,5 +94,24 @@ describe('resolveMiewidModelSource', () => {
       code: 'network-error',
       message: 'getaddrinfo ENOTFOUND',
     });
+  });
+
+  it('resolves format tflite for a .tflite download URL', async () => {
+    mockGetLatestModel.mockResolvedValue({
+      ok: true,
+      data: {
+        name: 'miewid-litert',
+        version: '4.1.0',
+        sha256: 'a'.repeat(64),
+        sizeBytes: 53_000_000,
+        downloadUrl:
+          'https://ganeshasfc2o4rujo76u.blob.core.windows.net/model-artifacts/miewid-litert/4.1.0/miewid_v4_1.tflite?sig=x',
+      },
+    });
+
+    const result = await resolveMiewidModelSource('miewid-litert');
+
+    expect(mockGetLatestModel).toHaveBeenCalledWith('miewid-litert');
+    expect(result.ok && result.source.format).toBe('tflite');
   });
 });

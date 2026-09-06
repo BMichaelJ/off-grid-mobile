@@ -479,6 +479,7 @@ describe('wildlifeStore', () => {
       sizeBytes: 103_859_027,
       status: 'ready',
       verifiedAt: '2026-08-01T00:00:00.000Z',
+      format: 'onnx',
       ...overrides,
     });
 
@@ -544,6 +545,7 @@ describe('wildlifeStore', () => {
         sizeBytes: null,
         status: 'missing',
         verifiedAt: null,
+        format: 'onnx',
       });
       expect(
         (state as unknown as { miewidModelPath?: unknown }).miewidModelPath,
@@ -589,15 +591,39 @@ describe('wildlifeStore', () => {
         sizeBytes: 103_859_027,
         status: 'ready',
         verifiedAt: '2026-08-01T00:00:00.000Z',
+        format: 'onnx',
       };
       await AsyncStorage.setItem(
         'wildlife-store',
-        JSON.stringify({ state: { miewidModel: record }, version: 2 }),
+        JSON.stringify({ state: { miewidModel: record }, version: 3 }),
       );
 
       await useWildlifeStore.persist.rehydrate();
 
       expect(useWildlifeStore.getState().miewidModel).toEqual(record);
+    });
+
+    it('backfills format onnx for a pre-format-field (version 2) record', async () => {
+      const legacyRecord = {
+        path: '/models/miewid-4.1.0.onnx',
+        name: 'miewid',
+        version: '4.1.0',
+        sha256: 'abc123',
+        sizeBytes: 103_859_027,
+        status: 'ready',
+        verifiedAt: '2026-08-01T00:00:00.000Z',
+      };
+      await AsyncStorage.setItem(
+        'wildlife-store',
+        JSON.stringify({ state: { miewidModel: legacyRecord }, version: 2 }),
+      );
+
+      await useWildlifeStore.persist.rehydrate();
+
+      expect(useWildlifeStore.getState().miewidModel).toEqual({
+        ...legacyRecord,
+        format: 'onnx',
+      });
     });
   });
 
@@ -619,6 +645,7 @@ describe('wildlifeStore', () => {
         sizeBytes: 1000,
         status: 'ready',
         verifiedAt: '2026-08-01T00:00:00.000Z',
+        format: 'onnx',
       });
       useWildlifeStore.getState().getNextFieldId(); // bumps counter to 2
 

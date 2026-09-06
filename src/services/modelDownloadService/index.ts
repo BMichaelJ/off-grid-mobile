@@ -32,10 +32,12 @@ const normalizedSha256 = (value: string): string | null => {
 const artifactKey = (source: ModelSource, sha256: string): string =>
   `${pathPart(source.name)}-${pathPart(source.version)}-${sha256}`;
 
+// ModelFormat values ('onnx' | 'tflite') double as the file extension, so an
+// ONNX and a LiteRT install of the same name/version never collide on disk.
 const stagingPathFor = (source: ModelSource, sha256: string) =>
-  `${stagingDir()}/${artifactKey(source, sha256)}.onnx.part`;
+  `${stagingDir()}/${artifactKey(source, sha256)}.${source.format}.part`;
 const finalPathFor = (source: ModelSource, sha256: string) =>
-  `${modelsDir()}/${artifactKey(source, sha256)}.onnx`;
+  `${modelsDir()}/${artifactKey(source, sha256)}.${source.format}`;
 
 async function reuseVerifiedModel(
   path: string,

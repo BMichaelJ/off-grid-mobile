@@ -8,6 +8,15 @@ export type MiewIDModelStatus =
   | 'incompatible';
 
 /**
+ * Which inference runtime an installed model artifact requires. 'onnx' runs
+ * via onnxruntime-react-native (CPU, all platforms — the only format that
+ * existed before WS7). 'tflite' is the LiteRT artifact Android's GPU
+ * delegate path uses (see docs/ELEBOOK_FIELD_READINESS_PLAN.md WS7). Both
+ * formats of the same model `version` produce the same embedding space.
+ */
+export type ModelFormat = 'onnx' | 'tflite';
+
+/**
  * Persisted identity of the installed MiewID embedding model.
  *
  * `sha256`/`sizeBytes` are null only for records migrated from the legacy
@@ -23,6 +32,7 @@ export interface MiewIDModelRecord {
   sizeBytes: number | null;
   status: MiewIDModelStatus;
   verifiedAt: string | null;
+  format: ModelFormat;
 }
 
 // === Embedding Pack Types ===
