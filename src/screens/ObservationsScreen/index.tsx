@@ -18,6 +18,7 @@ import { createStyles } from './styles';
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 type FilterKey = 'all' | 'pending' | 'reviewed' | 'synced';
+type SortOrder = 'newest' | 'oldest';
 
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'all', label: 'All' },
@@ -82,19 +83,32 @@ function filterObservations(
   }
 }
 
+/** Sorts by capture time -- the same field the row displays via formatTimestamp. */
+function sortObservations(observations: Observation[], order: SortOrder): Observation[] {
+  const direction = order === 'newest' ? -1 : 1;
+  return [...observations].sort(
+    (a, b) => direction * (new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()),
+  );
+}
+
 export const ObservationsScreen: React.FC = () => {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
   const navigation = useNavigation<NavigationProp>();
   const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
 
   const observations = useWildlifeStore(s => s.observations);
   const syncQueue = useWildlifeStore(s => s.syncQueue);
 
   const filtered = useMemo(
-    () => filterObservations(observations, syncQueue, activeFilter),
-    [observations, syncQueue, activeFilter],
+    () => sortObservations(filterObservations(observations, syncQueue, activeFilter), sortOrder),
+    [observations, syncQueue, activeFilter, sortOrder],
   );
+
+  const toggleSortOrder = useCallback(() => {
+    setSortOrder(order => (order === 'newest' ? 'oldest' : 'newest'));
+  }, []);
 
   const handleObservationPress = useCallback(
     (observationId: string) => {
@@ -164,7 +178,23 @@ export const ObservationsScreen: React.FC = () => {
       edges={['top']}
     >
       <View style={styles.header}>
-        <Text style={styles.title}>Observations</Text>
+        <View style={styles.headerRow}>
+          <Text style={styles.title}>Observations</Text>
+          <TouchableOpacity
+            style={styles.sortButton}
+            onPress={toggleSortOrder}
+            testID="sort-toggle-button"
+          >
+            <Icon
+              name={sortOrder === 'newest' ? 'arrow-down' : 'arrow-up'}
+              size={14}
+              color={colors.textSecondary}
+            />
+            <Text style={styles.sortButtonText}>
+              {sortOrder === 'newest' ? 'Newest first' : 'Oldest first'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.filterBar} testID="filter-bar">

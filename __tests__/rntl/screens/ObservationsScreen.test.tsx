@@ -288,6 +288,50 @@ describe('ObservationsScreen', () => {
   });
 
   // ==========================================================================
+  // Sorting
+  // ==========================================================================
+
+  it('defaults to showing the newest observation first', () => {
+    mockObservations = [
+      makeObservation({
+        id: 'obs-old',
+        timestamp: '2025-06-01T00:00:00Z',
+        photoUri: 'file:///test/old.jpg',
+      }),
+      makeObservation({
+        id: 'obs-new',
+        timestamp: '2025-06-10T00:00:00Z',
+        photoUri: 'file:///test/new.jpg',
+      }),
+    ];
+    const { getByTestId, getByText } = render(<ObservationsScreen />);
+    expect(getByText('Newest first')).toBeTruthy();
+    expect(getByTestId('observation-thumbnail-0').props.source.uri).toContain('new.jpg');
+    expect(getByTestId('observation-thumbnail-1').props.source.uri).toContain('old.jpg');
+  });
+
+  it('shows the oldest observation first after toggling the sort order', () => {
+    mockObservations = [
+      makeObservation({
+        id: 'obs-old',
+        timestamp: '2025-06-01T00:00:00Z',
+        photoUri: 'file:///test/old.jpg',
+      }),
+      makeObservation({
+        id: 'obs-new',
+        timestamp: '2025-06-10T00:00:00Z',
+        photoUri: 'file:///test/new.jpg',
+      }),
+    ];
+    const { getByTestId, getByText } = render(<ObservationsScreen />);
+    fireEvent.press(getByTestId('sort-toggle-button'));
+
+    expect(getByText('Oldest first')).toBeTruthy();
+    expect(getByTestId('observation-thumbnail-0').props.source.uri).toContain('old.jpg');
+    expect(getByTestId('observation-thumbnail-1').props.source.uri).toContain('new.jpg');
+  });
+
+  // ==========================================================================
   // Filtering
   // ==========================================================================
 
