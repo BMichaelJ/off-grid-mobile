@@ -593,6 +593,59 @@ describe('PacksScreen', () => {
       }
     });
 
+    it('makes the Update button reachable when only the model format needs to change (pack itself is already current)', async () => {
+      const originalPlatformOsDescriptor = Object.getOwnPropertyDescriptor(Platform, 'OS');
+      Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'android' });
+      useAppStore.getState().setPreferGpuModel(true);
+
+      const installedPack = createPack({
+        id: 'proj_kariega',
+        packVersion: '2026-09-05T11:06:39Z',
+        artifactSha256: 'pack-sha',
+        status: 'ready',
+      });
+      useWildlifeStore.setState({
+        packs: [installedPack],
+        miewidModel: readyModel, // format: 'onnx', but the GPU preference now wants 'tflite'
+      });
+      mockCheckLatestPackStatus.mockResolvedValue({
+        ok: true,
+        isLatest: true,
+        latestVersion: installedPack.packVersion,
+      });
+      mockResolveMiewidModelSource.mockResolvedValue({
+        ok: true,
+        source: { ...latestModelSource, format: 'tflite' as const, expectedSha256: 'gpu-sha' },
+      });
+      mockPrepareMiewidModel.mockResolvedValue({ ...readyModel, format: 'tflite' });
+      mockAcquireLatestPack.mockResolvedValue({ ok: true, pack: createPack() });
+      let focusCallback: (() => void) | undefined;
+      mockUseFocusEffect.mockImplementation(callback => {
+        focusCallback = callback;
+      });
+
+      try {
+        const { getByText, getByTestId } = render(<PacksScreen />);
+        act(() => focusCallback?.());
+
+        // packUpdateState alone would say "Up to date" -- the model-format
+        // mismatch must override that so the button is actually pressable.
+        await waitFor(() => expect(getByText('Update available')).toBeTruthy());
+        fireEvent.press(getByTestId('update-pack-button'));
+
+        await waitFor(() =>
+          expect(mockResolveMiewidModelSource).toHaveBeenCalledWith(MIEWID_LITERT_MODEL_NAME),
+        );
+        expect(mockPrepareMiewidModel).toHaveBeenCalled();
+        expect(mockAcquireLatestPack).toHaveBeenCalled();
+      } finally {
+        useAppStore.getState().setPreferGpuModel(false);
+        if (originalPlatformOsDescriptor) {
+          Object.defineProperty(Platform, 'OS', originalPlatformOsDescriptor);
+        }
+      }
+    });
+
     it('replaces a ready model when the latest artifact identity changed', async () => {
       useWildlifeStore.setState({
         miewidModel: {

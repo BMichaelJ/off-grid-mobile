@@ -10,6 +10,7 @@ import { useThemedStyles } from '../theme/useThemedStyles';
 import { useAppStore } from '../stores';
 import { useWildlifeStore } from '../stores/wildlifeStore';
 import type { EmbeddingPack } from '../types/wildlife';
+import type { ModelFormat } from '../types';
 import type { RootStackParamList } from '../navigation/types';
 import { GANESHA_PROJECT_ID } from '../config/ganeshaApi';
 import { MIEWID_LITERT_MODEL_NAME, MIEWID_MODEL_NAME } from '../config/modelSources';
@@ -50,6 +51,26 @@ function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString();
 }
 
+/** GPU/LiteRT is Android-only (WS7); the toggle is a no-op elsewhere. */
+function resolveDesiredModelFormat(preferGpuModel: boolean): ModelFormat {
+  return preferGpuModel && Platform.OS === 'android' ? 'tflite' : 'onnx';
+}
+
+/**
+ * packUpdateState only tracks pack freshness, so a GPU-preference flip
+ * needs to be reachable through the Update button even when the pack
+ * itself is already current -- otherwise handleDownloadPack's model
+ * re-resolution would never run.
+ */
+function computeEffectivePackUpdateState(
+  packUpdateState: PackUpdateState,
+  installedFormat: ModelFormat | undefined,
+  desiredFormat: ModelFormat,
+): PackUpdateState {
+  const formatMismatch = installedFormat != null && installedFormat !== desiredFormat;
+  return packUpdateState === 'current' && formatMismatch ? 'available' : packUpdateState;
+}
+
 export const PacksScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const styles = useThemedStyles(createStyles);
@@ -60,6 +81,11 @@ export const PacksScreen: React.FC = () => {
     useState<PackUpdateState>('unchecked');
   const updateInFlight = useRef(false);
   const statusRequest = useRef(0);
+  const effectivePackUpdateState = computeEffectivePackUpdateState(
+    packUpdateState,
+    miewidModel?.format,
+    resolveDesiredModelFormat(preferGpuModel),
+  );
   const installedProjectPack = packs.find(
     pack => pack.id === GANESHA_PROJECT_ID,
   );
@@ -106,10 +132,8 @@ export const PacksScreen: React.FC = () => {
       if (!(await ensureSignedIn(navigation))) {
         return;
       }
-      // GPU/LiteRT is Android-only (WS7) -- the toggle is a no-op on iOS,
-      // which always resolves the standard ONNX model.
       const modelName =
-        preferGpuModel && Platform.OS === 'android'
+        resolveDesiredModelFormat(preferGpuModel) === 'tflite'
           ? MIEWID_LITERT_MODEL_NAME
           : MIEWID_MODEL_NAME;
       const resolvedSource = await resolveMiewidModelSource(modelName);
@@ -185,22 +209,22 @@ export const PacksScreen: React.FC = () => {
 
   const updateStatusText = isDownloading
     ? 'Downloading and validating update...'
-    : packUpdateState === 'checking'
+    : effectivePackUpdateState === 'checking'
       ? 'Checking for updates...'
-      : packUpdateState === 'current'
+      : effectivePackUpdateState === 'current'
         ? 'Up to date'
-        : packUpdateState === 'available'
+        : effectivePackUpdateState === 'available'
           ? 'Update available'
-          : packUpdateState === 'unavailable'
+          : effectivePackUpdateState === 'unavailable'
             ? 'Unable to check for updates'
             : 'Update status not checked';
 
   const updateButtonTitle =
-    packUpdateState === 'current'
+    effectivePackUpdateState === 'current'
       ? 'Check Again'
-      : packUpdateState === 'available'
+      : effectivePackUpdateState === 'available'
         ? 'Update to Latest Pack'
-        : packUpdateState === 'checking'
+        : effectivePackUpdateState === 'checking'
           ? 'Checking for Updates'
           : 'Check for Updates';
 
@@ -271,7 +295,7 @@ export const PacksScreen: React.FC = () => {
               <Button
                 title={updateButtonTitle}
                 onPress={
-                  packUpdateState === 'available'
+                  effectivePackUpdateState === 'available'
                     ? handleDownloadPack
                     : handlePackStatusCheck
                 }
