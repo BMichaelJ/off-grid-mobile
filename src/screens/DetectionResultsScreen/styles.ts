@@ -83,12 +83,13 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   boxLabel: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    gap: 4,
-    paddingHorizontal: SPACING.xs,
-    paddingVertical: 2,
+    gap: 6,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
   },
   boxLabelText: {
-    ...TYPOGRAPHY.labelSmall,
+    ...TYPOGRAPHY.bodySmall,
+    fontWeight: '600' as const,
     color: '#FFFFFF',
   },
 });

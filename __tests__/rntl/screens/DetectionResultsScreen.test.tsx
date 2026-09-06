@@ -198,7 +198,7 @@ describe('DetectionResultsScreen', () => {
     ];
 
     const { getByText } = render(<DetectionResultsScreen />);
-    expect(getByText('zebra_plains')).toBeTruthy();
+    expect(getByText('zebra_plains \u00b7 Tap to Review')).toBeTruthy();
   });
 
   it('shows a tap-to-review hint on an unreviewed bounding box', () => {
